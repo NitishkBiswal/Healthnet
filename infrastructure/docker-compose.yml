@@ -1,0 +1,101 @@
+
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: healthnet-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: healthnet
+      POSTGRES_PASSWORD: healthnet_dev_password
+      POSTGRES_DB: healthnet_db
+    volumes:
+      - healthnet_pgdata:/var/lib/postgresql/data
+      - ./init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U healthnet -d healthnet_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - healthnet
+
+  redis:
+    image: redis:7-alpine
+    container_name: healthnet-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - healthnet_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - healthnet
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: healthnet-keycloak
+    ports:
+      - "8180:8080"
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
+      KC_DB_USERNAME: healthnet
+      KC_DB_PASSWORD: healthnet_dev_password
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    command: start-dev --import-realm
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '200'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - healthnet
+
+  hapi-fhir:
+    image: hapiproject/hapi:latest
+    container_name: healthnet-hapi-fhir
+    ports:
+      - "8090:8080"
+    environment:
+      spring.datasource.url: jdbc:postgresql://postgres:5432/hapi_fhir_db
+      spring.datasource.username: healthnet
+      spring.datasource.password: healthnet_dev_password
+      spring.datasource.driverClassName: org.postgresql.Driver
+      spring.jpa.properties.hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
+      hapi.fhir.fhir_version: R4
+      hapi.fhir.allow_external_references: "true"
+      hapi.fhir.allow_multiple_delete: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/fhir/metadata || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - healthnet
+
+volumes:
+  healthnet_pgdata:
+  healthnet_redis:
+
+networks:
+  healthnet:
+    driver: bridge

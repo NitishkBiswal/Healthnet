@@ -1,0 +1,78 @@
+{
+  "realm": "healthnet",
+  "enabled": true,
+  "displayName": "HealthNet",
+  "displayNameHtml": "<strong>HealthNet</strong>",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 1800,
+  "roles": {
+    "realm": [
+      { "name": "patient", "description": "Patient role — can manage own identity, consent, view records" },
+      { "name": "provider", "description": "Healthcare provider — can request records, use break-glass" },
+      { "name": "admin", "description": "System administrator — manages providers, organizations, policies" },
+      { "name": "auditor", "description": "Auditor/regulator — can inspect audit events, verify authorization" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "healthnet-backend",
+      "name": "HealthNet Backend",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "healthnet-backend-secret",
+      "redirectUris": ["http://localhost:8000/*"],
+      "webOrigins": ["http://localhost:8000"],
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false
+    },
+    {
+      "clientId": "healthnet-frontend",
+      "name": "HealthNet Frontend",
+      "enabled": true,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true
+    }
+  ],
+  "users": [
+    {
+      "username": "testadmin",
+      "enabled": true,
+      "email": "admin@healthnet.dev",
+      "firstName": "Test",
+      "lastName": "Admin",
+      "credentials": [{ "type": "password", "value": "admin", "temporary": false }],
+      "realmRoles": ["admin"]
+    },
+    {
+      "username": "testdoctor",
+      "enabled": true,
+      "email": "doctor@healthnet.dev",
+      "firstName": "Test",
+      "lastName": "Doctor",
+      "credentials": [{ "type": "password", "value": "doctor", "temporary": false }],
+      "realmRoles": ["provider"]
+    },
+    {
+      "username": "testpatient",
+      "enabled": true,
+      "email": "patient@healthnet.dev",
+      "firstName": "Test",
+      "lastName": "Patient",
+      "credentials": [{ "type": "password", "value": "patient", "temporary": false }],
+      "realmRoles": ["patient"]
+    }
+  ]
+}
