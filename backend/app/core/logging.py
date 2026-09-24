@@ -1,10 +1,9 @@
-import logging
-import sys
 from typing import Any
 
 import structlog
 
 from app.core.config import settings
+
 
 def configure_logging() -> None:
     shared_processors = [
@@ -12,13 +11,10 @@ def configure_logging() -> None:
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.contextvars.merge_contextvars,
-        # correlation_id processor could be added here
     ]
 
     if settings.DEBUG:
-        processors = shared_processors + [
-            structlog.dev.ConsoleRenderer(),
-        ]
+        processors = shared_processors + [structlog.dev.ConsoleRenderer()]
     else:
         processors = shared_processors + [
             structlog.processors.dict_tracebacks,
@@ -31,6 +27,7 @@ def configure_logging() -> None:
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
+
 
 def get_logger(name: str) -> Any:
     return structlog.get_logger(name)
