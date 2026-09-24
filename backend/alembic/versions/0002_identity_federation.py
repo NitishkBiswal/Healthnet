@@ -14,6 +14,7 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.create_sequence(sa.Sequence("health_id_sequence", schema="healthnet"), start=1)
     op.create_table(
         "patient_identity",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -96,3 +97,4 @@ def downgrade() -> None:
     op.drop_index("ix_patient_identity_jurisdiction", table_name="patient_identity", schema="healthnet")
     op.drop_index("ix_patient_identity_health_id", table_name="patient_identity", schema="healthnet")
     op.drop_table("patient_identity", schema="healthnet")
+    op.drop_sequence("health_id_sequence", schema="healthnet")
