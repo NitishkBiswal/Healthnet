@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.identity.models import (
@@ -16,7 +16,7 @@ from app.identity.models import (
     PatientIdentity,
     PatientLocationHistory,
 )
-from app.identity.schemas import PatientRegistrationRequest
+from app.identity.schemas import LocationHistoryRequest, PatientRegistrationRequest
 
 
 @dataclass(frozen=True)
@@ -102,12 +102,9 @@ class IdentityService:
     async def _next_health_id(self, jurisdiction: str) -> str:
         prefix = self.health_id_prefix(jurisdiction)
         result = await self.session.execute(
-            select(func.max(PatientIdentity.display_health_id)).where(
-                PatientIdentity.display_health_id.like(f"{prefix}%")
-            )
+            text("SELECT nextval('healthnet.health_id_sequence')")
         )
-        current = result.scalar_one_or_none()
-        number = int(current[len(prefix):]) + 1 if current and current[len(prefix):].isdigit() else 1
+        number = int(result.scalar_one())
         return f"{prefix}{number:06d}"
 
     async def register_patient(
@@ -170,7 +167,7 @@ class IdentityService:
         )
         return list(result.scalars().all())
 
-    async def add_location(self, patient_id: UUID, request: object) -> PatientLocationHistory:
+    async def add_location(self, patient_id: UUID, request: LocationHistoryRequest) -> PatientLocationHistory:
         location = PatientLocationHistory(
             patient_id=patient_id,
             jurisdiction=request.jurisdiction,
