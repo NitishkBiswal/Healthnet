@@ -40,7 +40,7 @@ async def register_patient(
     ]
     return RegistrationResult(
         outcome=outcome,
-        patient=patient,
+        patient=PatientResponse.model_validate(patient) if patient else None,
         matches=candidates,
         duplicate_review_id=review.id if review else None,
     )
