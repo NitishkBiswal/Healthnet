@@ -69,8 +69,12 @@ export interface RegistrationRequest {
   }[];
 }
 
-const API_BASE_URL =
+const configuredApiUrl =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+
+const API_BASE_URL = configuredApiUrl.endsWith("/api/v1")
+  ? configuredApiUrl
+  : `${configuredApiUrl.replace(/\/$/, "")}/api/v1`;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
