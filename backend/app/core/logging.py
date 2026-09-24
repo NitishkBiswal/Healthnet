@@ -6,7 +6,7 @@ from app.core.config import settings
 
 
 def configure_logging() -> None:
-    shared_processors = [
+    shared_processors: list[Any] = [
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
@@ -14,7 +14,7 @@ def configure_logging() -> None:
     ]
 
     if settings.DEBUG:
-        processors = shared_processors + [structlog.dev.ConsoleRenderer()]
+        processors: list[Any] = shared_processors + [structlog.dev.ConsoleRenderer()]
     else:
         processors = shared_processors + [
             structlog.processors.dict_tracebacks,
