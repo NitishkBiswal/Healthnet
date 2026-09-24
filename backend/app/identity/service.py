@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from uuid import UUID
 
@@ -187,7 +187,7 @@ class IdentityService:
             return None
         review.status = decision
         review.reviewer_note = reviewer_note
-        review.reviewed_at = datetime.now(timezone.utc)
+        review.reviewed_at = datetime.now(UTC)
         return review
 
     async def merge_identities(self, source_patient_id: UUID, target_patient_id: UUID) -> PatientIdentity:
