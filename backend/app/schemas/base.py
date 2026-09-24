@@ -1,8 +1,9 @@
 from typing import Any, Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 T = TypeVar("T")
+
 
 class HealthResponse(BaseModel):
     service: str
@@ -12,10 +13,12 @@ class HealthResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class AggregateHealthResponse(BaseModel):
     status: str
     version: str
     services: list[HealthResponse]
+
 
 class ErrorResponse(BaseModel):
     type: str = "about:blank"
@@ -23,6 +26,7 @@ class ErrorResponse(BaseModel):
     status: int
     detail: str
     instance: str | None = None
+
 
 class PaginatedResponse(BaseModel, Generic[T]):
     items: list[T]
