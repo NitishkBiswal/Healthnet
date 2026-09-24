@@ -1,11 +1,13 @@
 from fastapi import APIRouter, HTTPException
 
-router = APIRouter(tags=['Jurisdiction Policy'])
+router = APIRouter(tags=["Jurisdiction Policy"])
+
 
 @router.post("/policy/evaluate")
-async def evaluate_policy():
+async def evaluate_policy() -> None:
     raise HTTPException(status_code=501, detail="Not Implemented: Segment 6")
 
+
 @router.get("/policy/rules")
-async def get_policy_rules():
+async def get_policy_rules() -> None:
     raise HTTPException(status_code=501, detail="Not Implemented: Segment 6")
