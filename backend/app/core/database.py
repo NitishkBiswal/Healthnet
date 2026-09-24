@@ -1,6 +1,4 @@
 from collections.abc import AsyncGenerator
-from typing import Any
-from uuid import uuid4
 
 from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
@@ -8,12 +6,14 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
+
 engine: AsyncEngine | None = None
 async_session_maker: async_sessionmaker[AsyncSession] | None = None
 
 
 class Base(DeclarativeBase):
     """Declarative Base class for SQLAlchemy models."""
+
     metadata = MetaData()
 
 
@@ -29,10 +29,6 @@ async def init_db() -> None:
         async_session_maker = async_sessionmaker(
             engine, class_=AsyncSession, expire_on_commit=False
         )
-
-        # For dev/testing only: create tables if they don't exist
-        # async with engine.begin() as conn:
-        #     await conn.run_sync(Base.metadata.create_all)
 
 
 async def close_db() -> None:
