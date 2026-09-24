@@ -68,7 +68,7 @@ async def decide_duplicate_review(
     if review is None:
         raise HTTPException(status_code=404, detail="Pending duplicate review not found")
     await session.commit()
-    return review
+    return DuplicateReviewResponse.model_validate(review)
 
 
 @router.post("/merge", response_model=PatientResponse)
@@ -83,7 +83,7 @@ async def merge_identities(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     await session.commit()
-    return target
+    return PatientResponse.model_validate(target)
 
 
 @router.get("/{health_id}", response_model=PatientResponse)
@@ -94,7 +94,7 @@ async def get_patient(
     patient = await IdentityService(session).get_patient_by_health_id(health_id)
     if patient is None:
         raise HTTPException(status_code=404, detail="Health ID not found")
-    return patient
+    return PatientResponse.model_validate(patient)
 
 
 @router.get("/{health_id}/identifiers")
