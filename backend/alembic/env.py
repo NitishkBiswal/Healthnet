@@ -34,8 +34,11 @@ def get_url() -> str:
     url = os.environ.get("DATABASE_URL")
     if url is None:
         from app.core.config import settings
-        url = settings.DATABASE_SYNC_URL
-    return url
+        url = settings.DATABASE_URL
+
+    # Alembic's online migrations use SQLAlchemy's async engine.
+    # Normalize a sync PostgreSQL URL if one is supplied through the environment.
+    return url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
 
 
 def run_migrations_offline() -> None:
