@@ -1,19 +1,23 @@
 from fastapi import APIRouter, HTTPException
 
-router = APIRouter(tags=['Provider Trust'])
+router = APIRouter(tags=["Provider Trust"])
+
 
 @router.post("/organizations")
-async def register_organization():
+async def register_organization() -> None:
     raise HTTPException(status_code=501, detail="Not Implemented: Segment 4")
+
 
 @router.get("/organizations/{org_id}")
-async def get_organization(org_id: str):
+async def get_organization(org_id: str) -> None:
     raise HTTPException(status_code=501, detail="Not Implemented: Segment 4")
+
 
 @router.post("/providers")
-async def register_provider():
+async def register_provider() -> None:
     raise HTTPException(status_code=501, detail="Not Implemented: Segment 4")
 
+
 @router.get("/providers/{provider_id}")
-async def get_provider(provider_id: str):
+async def get_provider(provider_id: str) -> None:
     raise HTTPException(status_code=501, detail="Not Implemented: Segment 4")
