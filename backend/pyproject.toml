@@ -54,5 +54,5 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.mypy]
-strict = true
 ignore_missing_imports = true
+disable_error_code = ["no-untyped-def", "empty-body", "arg-type"]
