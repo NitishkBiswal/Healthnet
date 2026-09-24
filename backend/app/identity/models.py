@@ -2,7 +2,7 @@ from datetime import date, datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, Text, Uuid, func
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -94,6 +94,8 @@ class DuplicateReview(Base):
     proposed_sex: Mapped[str | None] = mapped_column(String(32), nullable=True)
     proposed_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     proposed_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    proposed_issuing_jurisdiction: Mapped[str] = mapped_column(String(32))
+    proposed_identifiers: Mapped[list[dict[str, str | None]]] = mapped_column(JSON, default=list)
     confidence: Mapped[float] = mapped_column()
     status: Mapped[str] = mapped_column(
         String(32), default=DuplicateReviewStatus.PENDING.value, index=True
