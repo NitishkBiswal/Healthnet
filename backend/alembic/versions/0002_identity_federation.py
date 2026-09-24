@@ -77,6 +77,8 @@ def upgrade() -> None:
         sa.Column("proposed_sex", sa.String(32)),
         sa.Column("proposed_phone", sa.String(32)),
         sa.Column("proposed_email", sa.String(320)),
+        sa.Column("proposed_issuing_jurisdiction", sa.String(32), nullable=False),
+        sa.Column("proposed_identifiers", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
         sa.Column("confidence", sa.Float(), nullable=False),
         sa.Column("status", sa.String(32), nullable=False, server_default="PENDING"),
         sa.Column("reviewer_note", sa.Text()),
