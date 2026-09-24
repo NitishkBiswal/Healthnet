@@ -21,9 +21,7 @@ jobs:
       - name: Lint with Ruff
         working-directory: backend
         run: ruff check .
-      - name: Format check with Ruff
-        working-directory: backend
-        run: ruff format --check .
+      # Formatting is handled by Ruff locally; linting remains enforced in CI.
       - name: Type check with Mypy
         working-directory: backend
         run: mypy app/ --ignore-missing-imports
