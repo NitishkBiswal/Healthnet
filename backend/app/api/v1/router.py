@@ -2,19 +2,17 @@
 
 from fastapi import APIRouter
 
-api_router = APIRouter()
-
-# Domain module routers — import from actual module locations.
-# Each module's router is a stub returning 501 until its segment is implemented.
-from app.identity.router import router as identity_router
-from app.record_locator.router import router as record_locator_router
-from app.consent.router import router as consent_router
-from app.jurisdiction_policy.router import router as jurisdiction_policy_router
-from app.provider_trust.router import router as provider_trust_router
-from app.emergency.router import router as emergency_router
 from app.audit.router import router as audit_router
+from app.consent.router import router as consent_router
+from app.emergency.router import router as emergency_router
+from app.identity.router import router as identity_router
+from app.jurisdiction_policy.router import router as jurisdiction_policy_router
 from app.migration.router import router as migration_router
+from app.provider_trust.router import router as provider_trust_router
+from app.record_locator.router import router as record_locator_router
 from app.trust_ledger.router import router as trust_ledger_router
+
+api_router = APIRouter()
 
 api_router.include_router(identity_router, prefix="/identity", tags=["Identity"])
 api_router.include_router(record_locator_router, prefix="/record-locator", tags=["Record Locator"])
