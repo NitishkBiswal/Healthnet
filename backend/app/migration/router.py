@@ -1,15 +1,18 @@
 from fastapi import APIRouter, HTTPException
 
-router = APIRouter(tags=['Migration'])
+router = APIRouter(tags=["Migration"])
+
 
 @router.post("/transfer-requests")
-async def create_transfer_request():
+async def create_transfer_request() -> None:
     raise HTTPException(status_code=501, detail="Not Implemented: Segment 12")
+
 
 @router.get("/transfers/{transfer_id}/status")
-async def get_transfer_status(transfer_id: str):
+async def get_transfer_status(transfer_id: str) -> None:
     raise HTTPException(status_code=501, detail="Not Implemented: Segment 12")
 
+
 @router.post("/transfer-authorizations")
-async def authorize_transfer():
+async def authorize_transfer() -> None:
     raise HTTPException(status_code=501, detail="Not Implemented: Segment 12")
