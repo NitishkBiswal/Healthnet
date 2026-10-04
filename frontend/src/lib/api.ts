@@ -4,21 +4,97 @@ export type ServiceStatus = "healthy" | "degraded" | "unhealthy";
 export interface ServiceHealth { service: string; status: ServiceStatus; latency_ms: number | null; details?: Record<string, unknown> | null; }
 export interface AggregateHealthResponse { status: ServiceStatus; version: string; services: ServiceHealth[]; }
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1").replace(/\/$/, "").replace(/\/api\/v1$/, "") + "/api/v1";
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getAccessToken();
-  const response = await fetch(API_BASE_URL + path, { ...options, headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}), ...(options?.headers ?? {}) }, cache: "no-store" });
-  if (!response.ok) { const body = await response.text(); throw new Error(body || "HTTP " + response.status); }
+  const response = await fetch(API_BASE_URL + path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: "Bearer " + token } : {}),
+      ...(options?.headers ?? {}),
+    },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    let message = body || "HTTP " + response.status;
+    try {
+      const parsed = JSON.parse(body) as { detail?: string };
+      if (parsed.detail) message = parsed.detail;
+    } catch {}
+    throw new Error(message);
+  }
   return response.json() as Promise<T>;
 }
+
 export function fetchHealth() { return request<AggregateHealthResponse>("/health"); }
-export interface Patient { display_health_id: string; issuing_jurisdiction: string; given_name: string; family_name: string; date_of_birth: string; sex?: string; phone?: string; email?: string; address?: string; status: string; }
+
+export interface Patient {
+  id?: string;
+  display_health_id: string;
+  issuing_jurisdiction: string;
+  given_name: string;
+  family_name: string;
+  date_of_birth: string;
+  sex?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  status: string;
+}
+export interface PatientRegistration {
+  given_name: string;
+  family_name: string;
+  date_of_birth: string;
+  sex?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  issuing_jurisdiction: string;
+  identifiers?: { identifier_type: string; identifier_value: string; issuing_authority?: string }[];
+}
+export interface MatchCandidate { patient_id: string; health_id: string; confidence: number; band: string; }
+export interface RegistrationResult {
+  outcome: string;
+  patient?: Patient;
+  matches: MatchCandidate[];
+  duplicate_review_id?: string;
+}
+export interface DuplicateReview {
+  id: string;
+  candidate_patient_id: string;
+  confidence: number;
+  status: string;
+  reviewer_note?: string;
+  proposed_given_name: string;
+  proposed_family_name: string;
+  proposed_date_of_birth: string;
+  proposed_sex?: string;
+  proposed_phone?: string;
+  proposed_email?: string;
+  proposed_issuing_jurisdiction?: string;
+  proposed_identifiers?: { identifier_type: string; identifier_value: string; issuing_authority?: string }[];
+  created_at: string;
+  reviewed_at?: string;
+}
 export interface Repository { id: string; code: string; name: string; jurisdiction: string; base_url: string; status: string; description?: string; }
 export interface Consent { id: string; health_id: string; grantee_type: string; grantee_id: string; purpose: string; scopes: string[]; status: string; valid_from: string; valid_until?: string; revoked_at?: string; }
 export interface AuditEvent { id: string; event_type: string; health_id?: string; actor_id: string; action: string; payload: string; event_hash: string; created_at: string; }
 export interface Transfer { id: string; health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; state: string; authorization_reference?: string; package_hash?: string; error_message?: string; created_at: string; updated_at: string; }
+
 export const api = {
   currentPrincipal: () => request<{ subject: string; email?: string; roles: string[] }>("/authorization/me"),
   patient: (healthId: string) => request<Patient>("/identity/" + encodeURIComponent(healthId)),
+  myPatient: () => request<Patient>("/identity/me"),
+  registerPatient: (body: PatientRegistration) => request<RegistrationResult>("/identity/register", { method: "POST", body: JSON.stringify(body) }),
+  myDuplicateReviews: () => request<DuplicateReview[]>("/identity/duplicate-reviews/mine"),
+  duplicateReviews: () => request<DuplicateReview[]>("/identity/duplicate-reviews"),
+  decideDuplicateReview: (id: string, decision: "APPROVED_DUPLICATE" | "REJECTED", reviewer_note?: string) =>
+    request<DuplicateReview>("/identity/duplicate-reviews/" + encodeURIComponent(id) + "/decision", {
+      method: "POST",
+      body: JSON.stringify({ decision, reviewer_note }),
+    }),
   consents: (healthId: string) => request<Consent[]>("/consent/patients/" + encodeURIComponent(healthId) + "/consents"),
   emergency: (healthId: string) => request<Record<string, unknown>>("/emergency/patients/" + encodeURIComponent(healthId) + "/emergency-profile"),
   longitudinal: (healthId: string, purpose = "TREATMENT", scope = "clinical") => request<Record<string, unknown>>("/longitudinal/patients/longitudinal-view", { method: "POST", body: JSON.stringify({ health_id: healthId, purpose, scope }) }),
