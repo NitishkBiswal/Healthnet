@@ -1,6 +1,6 @@
 """Segment 14 security hardening fields.
 
-Revision ID: 0006_segment_14_security_hardening
+Revision ID: 0006_segment14
 Revises: 0005_segments_11_12
 """
 
@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0006_segment_14_security_hardening"
+revision = "0006_segment14"
 down_revision = "0005_segments_11_12"
 branch_labels = None
 depends_on = None
