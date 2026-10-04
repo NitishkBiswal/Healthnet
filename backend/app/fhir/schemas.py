@@ -1,17 +1,16 @@
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-
+from typing import Any
+from pydantic import BaseModel,Field
 class FHIRResource(BaseModel):
-    resourceType: str
-    id: Optional[str] = None
-    # TODO: Implement in Segment 7
-
+    resourceType:str
+    id:str|None=None
+    model_config={"extra":"allow"}
 class FHIRBundle(BaseModel):
-    type: str
-    total: Optional[int] = None
-    entry: List[Dict[str, Any]] = []
-    # TODO: Implement in Segment 7
-
+    resourceType:str="Bundle"
+    type:str
+    total:int|None=None
+    entry:list[dict[str,Any]]=Field(default_factory=list)
 class FHIRCapabilityStatement(BaseModel):
-    # TODO: Implement in Segment 7
-    pass
+    resourceType:str
+    status:str|None=None
+    fhirVersion:str|None=None
+    format:list[str]=Field(default_factory=list)
