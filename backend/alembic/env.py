@@ -7,7 +7,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from app.core.database import Base
 from app.consent import models as consent_models  # noqa: F401
+from app.audit import models as audit_models  # noqa: F401
+from app.emergency import models as emergency_models  # noqa: F401
 from app.identity import models as identity_models  # noqa: F401
+from app.jurisdiction_policy import models as jurisdiction_policy_models  # noqa: F401
+from app.provenance import models as provenance_models  # noqa: F401
 from app.provider_trust import models as provider_trust_models  # noqa: F401
 from app.record_locator import models as record_locator_models  # noqa: F401
 from app.repository import models as repository_models  # noqa: F401
