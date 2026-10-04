@@ -75,7 +75,9 @@ async def list_duplicate_reviews(
     _: dict = Depends(require_auditor),
     session: AsyncSession = Depends(get_db),
 ) -> list[DuplicateReviewResponse]:
-    result = await session.execute(select(DuplicateReview).order_by(DuplicateReview.created_at.desc()))
+    result = await session.execute(
+        select(DuplicateReview).order_by(DuplicateReview.created_at.desc())
+    )
     return list(result.scalars().all())
 
 
@@ -84,8 +86,7 @@ async def list_my_duplicate_reviews(
     user: dict = Depends(require_role(Role.PATIENT)),
     session: AsyncSession = Depends(get_db),
 ) -> list[DuplicateReviewResponse]:
-    reviews = await IdentityService(session).list_duplicate_reviews(str(user.get("sub")))
-    return list(reviews)
+    return await IdentityService(session).list_duplicate_reviews(str(user.get("sub")))
 
 
 @router.post("/duplicate-reviews/{review_id}/decision", response_model=DuplicateReviewResponse)
@@ -120,28 +121,48 @@ async def merge_identities(
     return PatientResponse.model_validate(target)
 
 
+@router.get("/me", response_model=PatientResponse)
+async def get_my_patient(
+    user: dict = Depends(require_role(Role.PATIENT)),
+    session: AsyncSession = Depends(get_db),
+) -> PatientResponse:
+    subject = str(user.get("sub"))
+    patient = await session.scalar(
+        select(__import__("app.identity.models", fromlist=["PatientIdentity"]).PatientIdentity).where(
+            __import__("app.identity.models", fromlist=["PatientIdentity"]).PatientIdentity.owner_subject == subject
+        )
+    )
+    if patient is None:
+        raise HTTPException(status_code=404, detail="No Health ID is linked to this account")
+    return PatientResponse.model_validate(patient)
+
+
 @router.get("/{health_id}", response_model=PatientResponse)
 async def get_patient(
     health_id: str,
-    _: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> PatientResponse:
     patient = await IdentityService(session).get_patient_by_health_id(health_id)
     if patient is None:
         raise HTTPException(status_code=404, detail="Health ID not found")
+    if Role.PATIENT.value in user.get("roles", []) and patient.owner_subject != str(user.get("sub")):
+        raise HTTPException(status_code=403, detail="Patients can only access their own Health ID")
     return PatientResponse.model_validate(patient)
 
 
 @router.get("/{health_id}/identifiers")
 async def get_patient_identifiers(
     health_id: str,
-    _: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[dict[str, str | None]]:
     service = IdentityService(session)
     patient = await service.get_patient_by_health_id(health_id)
     if patient is None:
         raise HTTPException(status_code=404, detail="Health ID not found")
+    if Role.PATIENT.value in user.get("roles", []) and patient.owner_subject != str(user.get("sub")):
+        raise HTTPException(status_code=403, detail="Patients can only access their own identifiers")
     return [
         {
             "identifier_type": item.identifier_type,
