@@ -22,6 +22,14 @@ def upgrade():
     op.create_index("ix_repository_code","repository",["code"],schema="healthnet")
     op.create_index("ix_repository_jurisdiction","repository",["jurisdiction"],schema="healthnet")
     op.create_index("ix_repository_status","repository",["status"],schema="healthnet")
+    op.execute("""
+        INSERT INTO healthnet.repository
+            (id, code, name, jurisdiction, base_url, status, description)
+        VALUES
+            ('00000000-0000-0000-0000-000000000201', 'IN-OD', 'Odisha Health Repository', 'IN-OD', 'http://localhost:8091/fhir', 'ONLINE', 'Simulated jurisdictional repository for development'),
+            ('00000000-0000-0000-0000-000000000202', 'IN-KA', 'Karnataka Health Repository', 'IN-KA', 'http://localhost:8092/fhir', 'ONLINE', 'Simulated jurisdictional repository for development'),
+            ('00000000-0000-0000-0000-000000000203', 'MV', 'Maldives Health Repository', 'MV', 'http://localhost:8093/fhir', 'ONLINE', 'Simulated jurisdictional repository for development')
+    """)
 
     op.create_table("ehr_custody",
         sa.Column("id",sa.Uuid(),nullable=False), sa.Column("health_id",sa.String(32),nullable=False),
