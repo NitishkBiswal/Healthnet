@@ -1,7 +1,9 @@
 from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel, ConfigDict, Field
+
 
 class MigrationState(StrEnum):
     REQUESTED = "REQUESTED"
@@ -19,6 +21,7 @@ class MigrationState(StrEnum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
+
 class TransferRequestCreate(BaseModel):
     health_id: str = Field(min_length=4, max_length=32)
     source_repository_id: UUID
@@ -26,14 +29,19 @@ class TransferRequestCreate(BaseModel):
     purpose: str = Field(min_length=2, max_length=128)
     scope: str = Field(min_length=1, max_length=128)
 
+
 class TransferAuthorizationRequest(BaseModel):
     authorization_reference: str = Field(min_length=1, max_length=256)
+
 
 class TransferExecuteRequest(BaseModel):
     resource_count: int = Field(default=0, ge=0, le=1000000)
     package_hash: str = Field(min_length=16, max_length=128)
 
+
 class TransferStatus(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     health_id: str
     source_repository_id: UUID
@@ -47,7 +55,10 @@ class TransferStatus(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class TransferManifestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     transfer_request_id: UUID
     resource_count: int
