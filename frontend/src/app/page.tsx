@@ -1,16 +1,5 @@
 import Link from "next/link";
-
-const portals = [
-  ["patient", "Patient Portal", "Identity, consent and emergency profile"],
-  ["doctor", "Doctor Portal", "Authorized federated longitudinal health view"],
-  ["admin", "Admin Portal", "Repositories and EHR migration"],
-  ["auditor", "Auditor Portal", "Audit and integrity verification"],
-];
-
+const portals = [["patient", "Patient Portal", "Identity, consent and emergency profile"], ["provider", "Doctor Portal", "Authorized federated longitudinal health view"], ["admin", "Admin Portal", "Repositories and EHR migration"], ["auditor", "Auditor Portal", "Audit and integrity verification"]];
 export default function Home() {
-  return <main className="min-h-screen bg-slate-50"><div className="mx-auto max-w-6xl px-6 py-16">
-    <div className="mb-12 text-center"><p className="text-sm font-semibold uppercase tracking-wider text-slate-500">HealthNet</p><h1 className="mt-2 text-4xl font-bold">Federated Health Network</h1><p className="mx-auto mt-3 max-w-2xl text-slate-600">One permanent identity, distributed clinical records, consent-gated access, FHIR interoperability and auditable trust.</p></div>
-    <div className="grid gap-5 md:grid-cols-2">{portals.map(([path,title,desc]) => <Link key={path} href={`/${path}`} className="rounded-2xl border bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><h2 className="text-xl font-semibold">{title}</h2><p className="mt-2 text-sm text-slate-500">{desc}</p><span className="mt-5 inline-block text-sm font-medium">Open portal →</span></Link>)}</div>
-    <div className="mt-8 rounded-xl border bg-white p-5 text-sm text-slate-600"><strong>Architecture:</strong> clinical data remains at jurisdictional repositories; HealthNet coordinates identity, authorization, location, interoperability and integrity metadata.</div>
-  </div></main>;
+  return <main className="min-h-screen bg-slate-50"><div className="mx-auto max-w-6xl px-6 py-16"><div className="mb-12 text-center"><p className="text-sm font-semibold uppercase tracking-wider text-slate-500">HealthNet</p><h1 className="mt-2 text-4xl font-bold">Federated Health Network</h1><p className="mx-auto mt-3 max-w-2xl text-slate-600">One permanent identity, distributed clinical records, consent-gated access, FHIR interoperability and auditable trust.</p></div><div className="grid gap-5 md:grid-cols-2">{portals.map(([path,title,desc]) => <Link key={path} href={"/login/" + path} className="rounded-2xl border bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><h2 className="text-xl font-semibold">{title}</h2><p className="mt-2 text-sm text-slate-500">{desc}</p><span className="mt-5 inline-block text-sm font-medium">Secure sign-in →</span></Link>)}</div><div className="mt-8 rounded-xl border bg-white p-5 text-sm text-slate-600"><strong>Security:</strong> authentication is handled by Keycloak using browser-based OpenID Connect with role-specific access control.</div></div></main>;
 }
