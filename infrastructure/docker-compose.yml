@@ -66,6 +66,22 @@ services:
     networks:
       - healthnet
 
+  keycloak-bootstrap:
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: healthnet-keycloak-bootstrap
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    entrypoint: ["/bin/bash", "/opt/keycloak/bootstrap-test-users.sh"]
+    volumes:
+      - ./keycloak/bootstrap-test-users.sh:/opt/keycloak/bootstrap-test-users.sh:ro
+    depends_on:
+      keycloak:
+        condition: service_started
+    networks:
+      - healthnet
+    restart: "no"
+
   hapi-fhir:
     image: hapiproject/hapi:latest
     container_name: healthnet-hapi-fhir
