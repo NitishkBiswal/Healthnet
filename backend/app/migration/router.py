@@ -12,31 +12,26 @@ from app.migration.schemas import (
     TransferStatus,
 )
 from app.migration.service import MigrationService
-from app.security.dependencies import get_current_user, require_role
+from app.security.dependencies import get_current_user
 from app.security.rbac import Role
 
 router = APIRouter(tags=["Migration"])
 
 
-def require_admin_or_system():
-    async def checker(user: dict = Depends(get_current_user)) -> dict:
-        roles = set(user.get("roles", []))
-        if Role.ADMIN.value not in roles and Role.SYSTEM.value not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Admin or system role required",
-            )
-        return user
-
-    return checker
+async def require_admin_or_system(user: dict = Depends(get_current_user)) -> dict:
+    roles = set(user.get("roles", []))
+    if Role.ADMIN.value not in roles and Role.SYSTEM.value not in roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or system role required",
+        )
+    return user
 
 
-def require_patient():
-    return require_role(Role.PATIENT)
-
-
-def require_system_or_admin():
-    return require_admin_or_system()
+async def require_patient(user: dict = Depends(get_current_user)) -> dict:
+    if Role.PATIENT.value not in user.get("roles", []):
+        raise HTTPException(status_code=403, detail="Role PATIENT required")
+    return user
 
 
 @router.post(
@@ -46,7 +41,7 @@ def require_system_or_admin():
 )
 async def create_transfer_request(
     request: TransferRequestCreate,
-    user: dict = Depends(require_admin_or_system()),
+    user: dict = Depends(require_admin_or_system),
     session: AsyncSession = Depends(get_db),
 ):
     try:
@@ -101,7 +96,7 @@ async def authorize_transfer(
 @router.post("/transfers/{transfer_id}/issue-token")
 async def issue_transfer_token(
     transfer_id: UUID,
-    user: dict = Depends(require_system_or_admin()),
+    user: dict = Depends(require_admin_or_system),
     session: AsyncSession = Depends(get_db),
 ):
     try:
