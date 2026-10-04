@@ -23,8 +23,16 @@ from app.security.rbac import Role
 router = APIRouter(tags=["Identity"])
 
 
-def require_admin():
-    return require_role(Role.ADMIN)
+async def require_admin(user: dict = Depends(get_current_user)) -> dict:
+    if Role.ADMIN.value not in user.get("roles", []):
+        raise HTTPException(status_code=403, detail="Role ADMIN required")
+    return user
+
+
+async def require_patient(user: dict = Depends(get_current_user)) -> dict:
+    if Role.PATIENT.value not in user.get("roles", []):
+        raise HTTPException(status_code=403, detail="Role PATIENT required")
+    return user
 
 
 def require_patient_or_admin():
@@ -37,8 +45,10 @@ def require_patient_or_admin():
     return checker
 
 
-def require_auditor():
-    return require_role(Role.AUDITOR)
+async def require_auditor(user: dict = Depends(get_current_user)) -> dict:
+    if Role.AUDITOR.value not in user.get("roles", []):
+        raise HTTPException(status_code=403, detail="Role AUDITOR required")
+    return user
 
 
 @router.post("/register", response_model=RegistrationResult, status_code=status.HTTP_201_CREATED)
@@ -83,7 +93,7 @@ async def list_duplicate_reviews(
 
 @router.get("/duplicate-reviews/mine", response_model=list[DuplicateReviewResponse])
 async def list_my_duplicate_reviews(
-    user: dict = Depends(require_role(Role.PATIENT)),
+    user: dict = Depends(require_patient),
     session: AsyncSession = Depends(get_db),
 ) -> list[DuplicateReviewResponse]:
     return await IdentityService(session).list_duplicate_reviews(str(user.get("sub")))
