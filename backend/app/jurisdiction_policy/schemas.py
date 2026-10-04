@@ -1,13 +1,26 @@
-from pydantic import BaseModel
+from uuid import UUID
+from pydantic import BaseModel, Field
 
 class PolicyEvaluationRequest(BaseModel):
-    # TODO: Implement in Segment 6
-    pass
+    source_jurisdiction:str=Field(min_length=2,max_length=32)
+    destination_jurisdiction:str=Field(min_length=2,max_length=32)
+    purpose:str=Field(min_length=2,max_length=128)
+    scope:str=Field(min_length=1,max_length=128)
 
 class PolicyEvaluationResult(BaseModel):
-    # TODO: Implement in Segment 6
-    pass
+    allowed:bool
+    reason:str
+    matched_rule_id:UUID|None=None
 
 class JurisdictionInfo(BaseModel):
-    # TODO: Implement in Segment 6
-    pass
+    code:str
+    name:str
+    active:bool
+
+class PolicyRuleCreate(BaseModel):
+    jurisdiction_code:str
+    name:str
+    purpose:str
+    scope:str
+    effect:str="ALLOW"
+    description:str|None=None
