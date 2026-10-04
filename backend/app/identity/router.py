@@ -17,7 +17,7 @@ from app.identity.schemas import (
     RegistrationResult,
 )
 from app.identity.service import IdentityService
-from app.security.dependencies import get_current_user, require_role
+from app.security.dependencies import get_current_user
 from app.security.rbac import Role
 
 router = APIRouter(tags=["Identity"])
@@ -54,7 +54,7 @@ async def require_auditor(user: dict = Depends(get_current_user)) -> dict:
 @router.post("/register", response_model=RegistrationResult, status_code=status.HTTP_201_CREATED)
 async def register_patient(
     request: PatientRegistrationRequest,
-    user: dict = Depends(require_patient_or_admin()),
+    user: dict = Depends(require_patient_or_admin),
     session: AsyncSession = Depends(get_db),
 ) -> RegistrationResult:
     roles = set(user.get("roles", []))
