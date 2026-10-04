@@ -2,7 +2,7 @@ from datetime import date, datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Uuid, func
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -35,6 +35,7 @@ class PatientIdentity(Base):
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    owner_subject: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
     status: Mapped[str] = mapped_column(String(24), default=IdentityStatus.ACTIVE.value)
     superseded_by: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("healthnet.patient_identity.id"), nullable=True
@@ -72,14 +73,14 @@ class PatientLocationHistory(Base):
         Uuid(as_uuid=True), ForeignKey("healthnet.patient_identity.id"), index=True
     )
     jurisdiction: Mapped[str] = mapped_column(String(32))
-    movement_type: Mapped[str] = mapped_column(String(40))
+    movement_type: Mapped[str] = mapped_column(String(64))
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class DuplicateReview(Base):
-    """Human-review queue for uncertain identity matches."""
+    """Manual review record for ambiguous identity matches."""
 
     __tablename__ = "duplicate_review"
     __table_args__ = {"schema": "healthnet"}
@@ -88,18 +89,17 @@ class DuplicateReview(Base):
     candidate_patient_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("healthnet.patient_identity.id"), index=True
     )
+    requesting_subject: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     proposed_given_name: Mapped[str] = mapped_column(String(100))
     proposed_family_name: Mapped[str] = mapped_column(String(100))
     proposed_date_of_birth: Mapped[date] = mapped_column(Date)
     proposed_sex: Mapped[str | None] = mapped_column(String(32), nullable=True)
     proposed_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     proposed_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
-    proposed_issuing_jurisdiction: Mapped[str] = mapped_column(String(32))
-    proposed_identifiers: Mapped[list[dict[str, str | None]]] = mapped_column(JSON, default=list)
+    proposed_issuing_jurisdiction: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    proposed_identifiers: Mapped[list[dict[str, str | None]] | None] = mapped_column(JSON, nullable=True)
     confidence: Mapped[float] = mapped_column()
-    status: Mapped[str] = mapped_column(
-        String(32), default=DuplicateReviewStatus.PENDING.value, index=True
-    )
+    status: Mapped[str] = mapped_column(String(32), default=DuplicateReviewStatus.PENDING.value, index=True)
     reviewer_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
