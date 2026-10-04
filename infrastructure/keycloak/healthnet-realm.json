@@ -13,10 +13,22 @@
   "accessTokenLifespan": 1800,
   "roles": {
     "realm": [
-      { "name": "patient", "description": "Patient role — can manage own identity, consent, view records" },
-      { "name": "provider", "description": "Healthcare provider — can request records, use break-glass" },
-      { "name": "admin", "description": "System administrator — manages providers, organizations, policies" },
-      { "name": "auditor", "description": "Auditor/regulator — can inspect audit events, verify authorization" }
+      {
+        "name": "patient",
+        "description": "Patient role — can manage own identity, consent, view records"
+      },
+      {
+        "name": "provider",
+        "description": "Healthcare provider — can request records, use break-glass"
+      },
+      {
+        "name": "admin",
+        "description": "System administrator — manages providers, organizations, policies"
+      },
+      {
+        "name": "auditor",
+        "description": "Auditor/regulator — can inspect audit events, verify authorization"
+      }
     ]
   },
   "clients": [
@@ -26,8 +38,12 @@
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "healthnet-backend-secret",
-      "redirectUris": ["http://localhost:8000/*"],
-      "webOrigins": ["http://localhost:8000"],
+      "redirectUris": [
+        "http://localhost:8000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8000"
+      ],
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
@@ -38,8 +54,12 @@
       "clientId": "healthnet-frontend",
       "name": "HealthNet Frontend",
       "enabled": true,
-      "redirectUris": ["http://localhost:3000/*"],
-      "webOrigins": ["http://localhost:3000"],
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "protocol": "openid-connect",
@@ -53,8 +73,16 @@
       "email": "admin@healthnet.dev",
       "firstName": "Test",
       "lastName": "Admin",
-      "credentials": [{ "type": "password", "value": "admin", "temporary": false }],
-      "realmRoles": ["admin"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "admin"
+      ]
     },
     {
       "username": "testdoctor",
@@ -62,8 +90,16 @@
       "email": "doctor@healthnet.dev",
       "firstName": "Test",
       "lastName": "Doctor",
-      "credentials": [{ "type": "password", "value": "doctor", "temporary": false }],
-      "realmRoles": ["provider"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "doctor",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "provider"
+      ]
     },
     {
       "username": "testpatient",
@@ -71,8 +107,33 @@
       "email": "patient@healthnet.dev",
       "firstName": "Test",
       "lastName": "Patient",
-      "credentials": [{ "type": "password", "value": "patient", "temporary": false }],
-      "realmRoles": ["patient"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "patient",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "patient"
+      ]
+    },
+    {
+      "username": "testauditor",
+      "enabled": true,
+      "email": "auditor@healthnet.dev",
+      "firstName": "Test",
+      "lastName": "Auditor",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "auditor",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "auditor"
+      ]
     }
   ]
 }
