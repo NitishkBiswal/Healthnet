@@ -48,8 +48,9 @@ async def create_transfer_request(
         item = await MigrationService(session).initiate_transfer(
             request, str(user.get("sub", "unknown"))
         )
+        response = TransferStatus.model_validate(item)
         await session.commit()
-        return item
+        return response
     except ValueError as exc:
         await session.rollback()
         raise HTTPException(400, str(exc)) from exc
@@ -86,8 +87,9 @@ async def authorize_transfer(
             str(user.get("sub", "unknown")),
             request.authorization_reference,
         )
+        response = TransferStatus.model_validate(item)
         await session.commit()
-        return item
+        return response
     except ValueError as exc:
         await session.rollback()
         raise HTTPException(400, str(exc)) from exc
@@ -121,7 +123,7 @@ async def issue_transfer_token(
 async def execute_transfer(
     transfer_id: UUID,
     request: TransferExecuteRequest,
-    user: dict = Depends(require_system_or_admin()),
+    user: dict = Depends(require_admin_or_system),
     session: AsyncSession = Depends(get_db),
 ):
     try:
