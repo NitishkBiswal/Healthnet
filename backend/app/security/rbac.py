@@ -1,16 +1,15 @@
-from enum import Enum
-from typing import Protocol
+from enum import StrEnum
 
-class Role(str, Enum):
-    PATIENT = "PATIENT"
-    PROVIDER = "PROVIDER"
-    ADMIN = "ADMIN"
-    AUDITOR = "AUDITOR"
-    SYSTEM = "SYSTEM"
+class Role(StrEnum):
+    PATIENT="PATIENT"; PROVIDER="PROVIDER"; ADMIN="ADMIN"; AUDITOR="AUDITOR"; SYSTEM="SYSTEM"
 
-class RBACService(Protocol):
-    async def check_role(self, role: Role) -> bool:
-        """Check if current user has the specified role."""
-        ...
+ROLE_PERMISSIONS:dict[Role,set[str]]={
+    Role.PATIENT:{"read:own","consent:manage"},
+    Role.PROVIDER:{"read:patient","write:clinical"},
+    Role.ADMIN:{"*"},
+    Role.AUDITOR:{"audit:read"},
+    Role.SYSTEM:{"*"},
+}
 
-# TODO: Implement in Segment 4
+def has_permission(roles:list[str],permission:str)->bool:
+    return any(permission in ROLE_PERMISSIONS.get(Role(role),set()) or "*" in ROLE_PERMISSIONS.get(Role(role),set()) for role in roles if role in {r.value for r in Role})
