@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.identity.models import DuplicateReview
+from app.identity.models import DuplicateReview, PatientIdentity
 from app.identity.schemas import (
     DuplicateReviewDecision,
     DuplicateReviewResponse,
@@ -128,9 +128,7 @@ async def get_my_patient(
 ) -> PatientResponse:
     subject = str(user.get("sub"))
     patient = await session.scalar(
-        select(__import__("app.identity.models", fromlist=["PatientIdentity"]).PatientIdentity).where(
-            __import__("app.identity.models", fromlist=["PatientIdentity"]).PatientIdentity.owner_subject == subject
-        )
+        select(PatientIdentity).where(PatientIdentity.owner_subject == subject)
     )
     if patient is None:
         raise HTTPException(status_code=404, detail="No Health ID is linked to this account")
