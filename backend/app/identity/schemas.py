@@ -69,6 +69,14 @@ class DuplicateReviewResponse(BaseModel):
     confidence: float
     status: str
     reviewer_note: str | None
+    proposed_given_name: str
+    proposed_family_name: str
+    proposed_date_of_birth: date
+    proposed_sex: str | None
+    proposed_phone: str | None
+    proposed_email: str | None
+    proposed_issuing_jurisdiction: str | None
+    proposed_identifiers: list[dict[str, str | None]] | None
     created_at: datetime
     reviewed_at: datetime | None
 
