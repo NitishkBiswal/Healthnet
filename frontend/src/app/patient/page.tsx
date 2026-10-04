@@ -19,7 +19,7 @@ export default function PatientPortal() {
     void api.myDuplicateReviews().then(setReviews).catch(() => {});
   }, []);
 
-  async function run(fn: () => Promise<unknown>, setter: (value: unknown) => void) {
+  async function run<T>(fn: () => Promise<T>, setter: (value: T) => void) {
     setError("");
     try {
       setter(await fn());
