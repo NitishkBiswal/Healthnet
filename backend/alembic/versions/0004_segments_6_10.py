@@ -12,6 +12,12 @@ depends_on=None
 def upgrade():
     op.create_table("jurisdiction",sa.Column("id",sa.Uuid(),primary_key=True),sa.Column("code",sa.String(32),unique=True,nullable=False),sa.Column("name",sa.String(160),nullable=False),sa.Column("active",sa.Boolean(),server_default=sa.true(),nullable=False),sa.Column("created_at",sa.DateTime(timezone=True),server_default=sa.func.now()),schema="healthnet")
     op.create_index("ix_jurisdiction_code","jurisdiction",["code"],schema="healthnet")
+    op.execute("""
+        INSERT INTO healthnet.jurisdiction (id, code, name, active) VALUES
+        ('00000000-0000-0000-0000-000000000601','IN-OD','Odisha',true),
+        ('00000000-0000-0000-0000-000000000602','IN-KA','Karnataka',true),
+        ('00000000-0000-0000-0000-000000000603','MV','Maldives',true)
+    """)
     op.create_table("policy_rule",sa.Column("id",sa.Uuid(),primary_key=True),sa.Column("jurisdiction_id",sa.Uuid(),nullable=False),sa.Column("name",sa.String(160),nullable=False),sa.Column("purpose",sa.String(128),nullable=False),sa.Column("scope",sa.String(128),nullable=False),sa.Column("effect",sa.String(16),server_default="ALLOW",nullable=False),sa.Column("description",sa.Text()),sa.Column("active",sa.Boolean(),server_default=sa.true(),nullable=False),schema="healthnet")
     op.create_index("ix_policy_rule_jurisdiction_id","policy_rule",["jurisdiction_id"],schema="healthnet")
     op.create_table("emergency_health_profile",sa.Column("id",sa.Uuid(),primary_key=True),sa.Column("health_id",sa.String(32),unique=True,nullable=False),sa.Column("blood_group",sa.String(8)),sa.Column("allergies",sa.Text(),server_default=""),sa.Column("medications",sa.Text(),server_default=""),sa.Column("conditions",sa.Text(),server_default=""),sa.Column("emergency_contacts",sa.Text(),server_default=""),sa.Column("updated_at",sa.DateTime(timezone=True),server_default=sa.func.now()),schema="healthnet")
