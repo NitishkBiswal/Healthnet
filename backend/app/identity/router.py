@@ -131,6 +131,17 @@ async def get_my_patient(
         select(PatientIdentity).where(PatientIdentity.owner_subject == subject)
     )
     if patient is None:
+        approved_review = await session.scalar(
+            select(DuplicateReview)
+            .where(
+                DuplicateReview.requesting_subject == subject,
+                DuplicateReview.status == "APPROVED_DUPLICATE",
+            )
+            .order_by(DuplicateReview.reviewed_at.desc())
+        )
+        if approved_review is not None:
+            patient = await session.get(PatientIdentity, approved_review.candidate_patient_id)
+    if patient is None:
         raise HTTPException(status_code=404, detail="No Health ID is linked to this account")
     return PatientResponse.model_validate(patient)
 
@@ -145,7 +156,15 @@ async def get_patient(
     if patient is None:
         raise HTTPException(status_code=404, detail="Health ID not found")
     if Role.PATIENT.value in user.get("roles", []) and patient.owner_subject != str(user.get("sub")):
-        raise HTTPException(status_code=403, detail="Patients can only access their own Health ID")
+        approved = await session.scalar(
+            select(DuplicateReview.id).where(
+                DuplicateReview.requesting_subject == str(user.get("sub")),
+                DuplicateReview.candidate_patient_id == patient.id,
+                DuplicateReview.status == "APPROVED_DUPLICATE",
+            )
+        )
+        if approved is None:
+            raise HTTPException(status_code=403, detail="Patients can only access their own Health ID")
     return PatientResponse.model_validate(patient)
 
 
