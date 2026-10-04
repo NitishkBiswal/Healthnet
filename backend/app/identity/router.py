@@ -35,15 +35,11 @@ async def require_patient(user: dict = Depends(get_current_user)) -> dict:
     return user
 
 
-def require_patient_or_admin():
-    async def checker(user: dict = Depends(get_current_user)) -> dict:
-        roles = set(user.get("roles", []))
-        if Role.PATIENT.value not in roles and Role.ADMIN.value not in roles:
-            raise HTTPException(status_code=403, detail="Patient or admin role required")
-        return user
-
-    return checker
-
+async def require_patient_or_admin(user: dict = Depends(get_current_user)) -> dict:
+    roles = set(user.get("roles", []))
+    if Role.PATIENT.value not in roles and Role.ADMIN.value not in roles:
+        raise HTTPException(status_code=403, detail="Patient or admin role required")
+    return user
 
 async def require_auditor(user: dict = Depends(get_current_user)) -> dict:
     if Role.AUDITOR.value not in user.get("roles", []):
@@ -133,7 +129,7 @@ async def merge_identities(
 
 @router.get("/me", response_model=PatientResponse)
 async def get_my_patient(
-    user: dict = Depends(require_role(Role.PATIENT)),
+    user: dict = Depends(require_patient),
     session: AsyncSession = Depends(get_db),
 ) -> PatientResponse:
     subject = str(user.get("sub"))
