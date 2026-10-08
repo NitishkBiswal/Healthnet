@@ -201,11 +201,13 @@ class MigrationService:
                         {"identifier": f"urn:healthnet:health-id|{item.health_id}"},
                     )
                     entries = bundle.get("entry", [])
-                    patients = [
-                        entry.get("resource")
-                        for entry in entries
-                        if isinstance(entry, dict) and isinstance(entry.get("resource"), dict)
-                    ]
+                    patients: list[dict] = []
+                    for entry in entries:
+                        if not isinstance(entry, dict):
+                            continue
+                        patient_resource = entry.get("resource")
+                        if isinstance(patient_resource, dict):
+                            patients.append(patient_resource)
                     if not patients:
                         try:
                             patients = [await source_client.get_resource("Patient", item.health_id)]
