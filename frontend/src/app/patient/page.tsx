@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { api, type DuplicateReview, type Patient } from "@/lib/api";
+import { api, type CurrentRecordLocation, type DuplicateReview, type Patient, type Transfer } from "@/lib/api";
 import { Card, PortalShell } from "@/components/portal-shell";
 
 export default function PatientPortal() {
@@ -17,9 +17,16 @@ export default function PatientPortal() {
   const [scope, setScope] = useState("clinical");
   const [validUntil, setValidUntil] = useState("");
   const [consentMessage, setConsentMessage] = useState("");
+  const [currentLocation, setCurrentLocation] = useState<CurrentRecordLocation | null>(null);
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [migrationMessage, setMigrationMessage] = useState("");
 
   useEffect(() => {
-    void api.myPatient().then(setPatient).catch(() => {});
+    void api.myPatient().then(async (value) => {
+      setPatient(value);
+      try { setCurrentLocation(await api.currentRecordLocation(value.display_health_id)); } catch {}
+      try { setTransfers(await api.myTransfers()); } catch {}
+    }).catch(() => {});
     void api.myDuplicateReviews().then(setReviews).catch(() => {});
   }, []);
 
@@ -85,7 +92,35 @@ export default function PatientPortal() {
         </Card>
       )}
 
+      {transfers.some((transfer) => transfer.state === "REQUESTED") && (
+        <Card title="Patient authorization required">
+          <div className="space-y-3">
+            {transfers.filter((transfer) => transfer.state === "REQUESTED").map((transfer) => (
+              <div key={transfer.id} className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+                <p className="font-bold text-slate-950">Repository migration requested</p>
+                <p className="mt-1 text-sm text-slate-700">An administrator requested that your record custody move to another repository.</p>
+                <button onClick={async () => { try { const updated = await api.authorizeTransfer(transfer.id, "PATIENT_APPROVED_IN_PORTAL"); setTransfers((items) => items.map((item) => item.id === updated.id ? updated : item)); setMigrationMessage("Migration authorized. The administrator can now complete the controlled transfer."); } catch (reason: unknown) { setMigrationMessage(reason instanceof Error ? reason.message : "Unable to authorize migration"); } }} className="mt-3 rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white">Authorize repository move</button>
+              </div>
+            ))}
+          </div>
+          {migrationMessage && <p className="mt-3 text-sm font-semibold text-slate-700">{migrationMessage}</p>}
+        </Card>
+      )}
+
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <Card title="Where is my medical record?">
+          {currentLocation ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+              <p className="text-sm text-slate-600">Current authoritative repository</p>
+              <p className="mt-1 text-2xl font-bold text-slate-950">{currentLocation.repository_name}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-700">{currentLocation.repository_code} · {currentLocation.jurisdiction}</p>
+              <p className="mt-2 text-sm text-slate-700">HealthNet retrieves your clinical record from this repository only. Your Health ID stays the same if you move.</p>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">No current clinical repository assignment is available.</p>
+          )}
+        </Card>
+
         <Card title="My Health ID">
           {patient ? (
             <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-5">

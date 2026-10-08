@@ -56,6 +56,16 @@ async def create_transfer_request(
         raise HTTPException(400, str(exc)) from exc
 
 
+@router.get("/my-transfers", response_model=list[TransferStatus])
+async def get_my_transfers(
+    user: dict = Depends(require_patient),
+    session: AsyncSession = Depends(get_db),
+):
+    return await MigrationService(session).get_patient_transfers(
+        str(user.get("sub", "unknown"))
+    )
+
+
 @router.get("/transfers/{transfer_id}/status", response_model=TransferStatus)
 async def get_transfer_status(
     transfer_id: UUID,
