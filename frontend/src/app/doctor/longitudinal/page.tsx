@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, type AuthorizedPatient, type CurrentRecordLocation, type Patient, type Principal } from "@/lib/api";
 import { Card, PortalShell } from "@/components/portal-shell";
@@ -98,7 +98,7 @@ function RecordCard({ record }: { record: LongitudinalRecord }) {
   );
 }
 
-export default function DoctorLongitudinalView() {
+function DoctorLongitudinalViewContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const healthId = searchParams.get("health_id") ?? "";
@@ -243,5 +243,22 @@ export default function DoctorLongitudinalView() {
         </div>
       )}
     </PortalShell>
+  );
+}
+
+
+export default function DoctorLongitudinalView() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-slate-50">
+          <div className="rounded-xl border bg-white p-8 text-center shadow-sm">
+            <p className="font-semibold">Loading patient record…</p>
+          </div>
+        </main>
+      }
+    >
+      <DoctorLongitudinalViewContent />
+    </Suspense>
   );
 }
