@@ -37,6 +37,11 @@ fi
   --new-password auditor \
   --temporary=false
 
+# The auditor test account must not inherit the patient role.
+/opt/keycloak/bin/kcadm.sh remove-roles -r healthnet \
+  --uusername testauditor \
+  --rolename patient >/dev/null 2>&1 || true
+
 /opt/keycloak/bin/kcadm.sh add-roles -r healthnet \
   --uusername testauditor \
   --rolename auditor
