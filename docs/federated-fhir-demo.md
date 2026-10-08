@@ -34,9 +34,10 @@ The script starts PostgreSQL, creates missing FHIR databases, starts the three r
 2. Start the backend with `cd backend`, `\.venv\Scripts\Activate.ps1`, then `uvicorn app.main:app --reload`.
 3. Start the frontend with `cd frontend` then `npm run dev`.
 4. Log in as `testpatient / patient`.
-5. Confirm Health ID `INOD000038` and grant the doctor's Provider ID access for `TREATMENT` + `clinical`.
-6. Log in as the doctor, select the authorized patient, and request the longitudinal view.
-7. Explain that HealthNet used the Record Locator to query three independent FHIR repositories at request time; clinical records are not centralized.
+5. If the doctor account is not already linked to a HealthNet Provider, use the Admin portal to onboard a doctor first. The onboarding flow creates the Keycloak account and Provider ID.
+6. Confirm Health ID `INOD000038` and grant the doctor's Provider ID access for `TREATMENT` + `clinical`.
+7. Log in as the doctor, select the authorized patient, and request the longitudinal view.
+8. Explain that HealthNet used the Record Locator to query three independent FHIR repositories at request time; clinical records are not centralized.
 
 ## Verify federation directly
 
@@ -45,6 +46,8 @@ Invoke-RestMethod "http://localhost:8091/fhir/Observation?patient=INOD000038"
 Invoke-RestMethod "http://localhost:8092/fhir/Observation?patient=INOD000038"
 Invoke-RestMethod "http://localhost:8093/fhir/Observation?patient=INOD000038"
 ```
+
+Before the UI demo, you can verify all three repositories with `scripts\verify-demo-fhir.ps1`.
 
 To demonstrate partial availability:
 
