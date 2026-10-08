@@ -77,6 +77,34 @@ async function challenge(verifier: string): Promise<string> {
   return base64Url(new Uint8Array(digest));
 }
 
+export async function beginRegistration(): Promise<void> {
+  const state = await randomString(32);
+  const verifier = await randomString(64);
+  const codeChallenge = await challenge(verifier);
+
+  sessionStorage.setItem(K.state, state);
+  sessionStorage.setItem(K.verifier, verifier);
+  sessionStorage.setItem(K.role, "patient");
+
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: window.location.origin + "/auth/callback",
+    response_type: "code",
+    scope: "openid profile email",
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+  });
+
+  window.location.assign(
+    KEYCLOAK_URL +
+      "/realms/" +
+      REALM +
+      "/protocol/openid-connect/registrations?" +
+      params.toString(),
+  );
+}
+
 export async function beginLogin(role: UserRole): Promise<void> {
   const state = await randomString(32);
   const verifier = await randomString(64);
