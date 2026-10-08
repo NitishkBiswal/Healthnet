@@ -7,6 +7,8 @@ from uuid import UUID
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.schemas import AuditEventCreate, AuditEventType
+from app.audit.service import AuditService
 from app.fhir.client import FHIRClient
 from app.migration.models import (
     TransferAuthorizationToken,
@@ -16,6 +18,8 @@ from app.migration.models import (
 from app.migration.schemas import MigrationState, TransferExecuteRequest, TransferRequestCreate
 from app.record_locator.models import RecordLocator
 from app.identity.models import PatientIdentity
+from app.provenance.schemas import ProvenanceRecord
+from app.provenance.service import ProvenanceService
 from app.repository.models import EHRCustody, Repository, RepositoryStatus
 
 
@@ -304,6 +308,37 @@ class MigrationService:
             validation_status="VALID_SHARED_ENDPOINT" if shared_endpoint else "VALID",
         )
         self.session.add(manifest)
+        await ProvenanceService(self.session).record_provenance(
+            ProvenanceRecord(
+                health_id=item.health_id,
+                repository_id=destination.id,
+                resource_type="Bundle",
+                resource_id=manifest_hash,
+                source_system=source.code,
+                actor_id=token_record.issued_by,
+                action="REPOSITORY_MIGRATION_VERIFIED",
+                details={
+                    "destination_repository": destination.code,
+                    "resource_count": len(exported),
+                    "package_hash": package_hash,
+                    "validation_status": "VALID_SHARED_ENDPOINT" if shared_endpoint else "VALID",
+                },
+            )
+        )
+        await AuditService(self.session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.MIGRATION,
+                health_id=item.health_id,
+                actor_id=token_record.issued_by,
+                action="REPOSITORY_MIGRATION_COMPLETED",
+                payload={
+                    "source_repository": source.code,
+                    "destination_repository": destination.code,
+                    "resource_count": len(exported),
+                    "package_hash": package_hash,
+                },
+            )
+        )
 
         # Switch the authoritative mapping only after the destination package has
         # been read back and verified. The row lock serializes this with ingestion.
