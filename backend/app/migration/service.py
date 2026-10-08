@@ -121,10 +121,12 @@ class MigrationService:
             raise ValueError("Source or destination repository not found")
 
         current = await self.session.scalar(
-            select(RecordLocator).where(
+            select(RecordLocator)
+            .where(
                 RecordLocator.health_id == item.health_id,
                 RecordLocator.status == "ACTIVE",
             )
+            .order_by(RecordLocator.created_at.desc())
         )
         if current is None or current.repository_id != source.id:
             raise ValueError("Patient is no longer assigned to the requested source repository")
@@ -161,7 +163,16 @@ class MigrationService:
             item.state = state.value
 
         # HealthNet stores custody metadata, not the clinical payload itself.
-        current.status = "INACTIVE"
+        # A patient must have exactly one authoritative ACTIVE locator.
+        # Deactivate every stale ACTIVE row before creating the destination row.
+        await self.session.execute(
+            update(RecordLocator)
+            .where(
+                RecordLocator.health_id == item.health_id,
+                RecordLocator.status == "ACTIVE",
+            )
+            .values(status="INACTIVE")
+        )
         self.session.add(
             EHRCustody(
                 health_id=item.health_id,
