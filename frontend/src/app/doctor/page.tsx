@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type AuthorizedPatient } from "@/lib/api";
+import { api, type AuthorizedPatient, type Principal } from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
 export default function DoctorPortal() {
@@ -12,27 +12,35 @@ export default function DoctorPortal() {
   const [result, setResult] = useState<unknown>(null);
   const [error, setError] = useState("");
   const [authorized, setAuthorized] = useState<AuthorizedPatient[]>([]);
-  const [principal, setPrincipal] = useState("");
+  const [principal, setPrincipal] = useState<Principal | null>(null);
+
+  async function loadPrincipal() {
+    try {
+      setPrincipal(await api.currentPrincipal());
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to load doctor identity");
+    }
+  }
 
   async function loadAuthorized() {
     try {
-      const [patients, me] = await Promise.all([
-        api.authorizedPatients(),
-        api.currentPrincipal(),
-      ]);
-      setAuthorized(patients);
-      setPrincipal(me.subject);
+      setAuthorized(await api.authorizedPatients());
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "Unable to load authorized patients");
     }
   }
 
   useEffect(() => {
+    void loadPrincipal();
     void loadAuthorized();
   }, []);
 
   async function load() {
     setError("");
+    if (!healthId) {
+      setError("Select an authorized patient first.");
+      return;
+    }
     try {
       setResult(await api.longitudinal(healthId, purpose, scope));
     } catch (reason: unknown) {
@@ -46,13 +54,18 @@ export default function DoctorPortal() {
       title="Doctor Portal"
       description="Federated longitudinal access is subject to authentication, consent and jurisdiction policy."
     >
-      <Card title="Your HealthNet identifier">
+      <Card title="Your HealthNet Provider ID">
         <p className="text-sm text-slate-700">
-          Patients use this identifier when granting you consent.
+          Patients use this Provider ID when granting you consent.
         </p>
         <p className="mt-2 rounded-lg bg-cyan-50 px-3 py-2 font-mono text-sm text-slate-950">
-          {principal || "Loading..."}
+          {principal?.provider_id || "Not linked to a HealthNet provider"}
         </p>
+        {!principal?.provider_id && principal?.subject && (
+          <p className="mt-2 text-xs text-slate-600">
+            Your account is authenticated, but an administrator must link this Keycloak account to a HealthNet Provider record before you can receive a Provider ID.
+          </p>
+        )}
       </Card>
 
       <Card title="Patients who have granted you consent">
@@ -96,21 +109,9 @@ export default function DoctorPortal() {
 
       <Card title="Authorized patient record view">
         <div className="grid gap-3 md:grid-cols-3">
-          <Field
-            value={healthId}
-            onChange={(e) => setHealthId(e.target.value)}
-            placeholder="Health ID"
-          />
-          <Field
-            value={purpose}
-            onChange={(e) => setPurpose(e.target.value)}
-            placeholder="Purpose"
-          />
-          <Field
-            value={scope}
-            onChange={(e) => setScope(e.target.value)}
-            placeholder="Scope"
-          />
+          <Field value={healthId} onChange={(e) => setHealthId(e.target.value)} placeholder="Health ID" />
+          <Field value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Purpose" />
+          <Field value={scope} onChange={(e) => setScope(e.target.value)} placeholder="Scope" />
         </div>
         <button
           onClick={load}
