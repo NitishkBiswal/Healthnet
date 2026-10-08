@@ -96,6 +96,11 @@ export const api = {
     request<Record<string, unknown>>("/longitudinal/patients/longitudinal-view", { method: "POST", body: JSON.stringify({ health_id: healthId, purpose, scope }) }),
   repositories: () => request<Repository[]>("/repository/repositories"),
   currentRecordLocation: (healthId: string) => request<CurrentRecordLocation>("/record-locator/patients/" + encodeURIComponent(healthId) + "/current"),
+  submitPatientRecord: (healthId: string, resource: Record<string, unknown>) =>
+    request<{ accepted: boolean; health_id: string; repository_code: string; resource_type: string; resource_id: string; message: string }>(
+      "/fhir/patients/" + encodeURIComponent(healthId) + "/records",
+      { method: "POST", body: JSON.stringify(resource) },
+    ),
   audits: (healthId: string) => request<AuditEvent[]>("/audit/patient/" + encodeURIComponent(healthId)),
   verifyLedger: () => request<{ valid: boolean; entries_checked: number }>("/trust-ledger/ledger/verify"),
   createTransfer: (body: { health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string }) =>
