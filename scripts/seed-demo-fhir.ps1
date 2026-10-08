@@ -48,6 +48,17 @@ Wait-Fhir "http://localhost:8091/fhir" "Odisha"
 Wait-Fhir "http://localhost:8092/fhir" "Karnataka"
 Wait-Fhir "http://localhost:8093/fhir" "Maldives"
 
+$adminToken = Invoke-RestMethod -Uri "http://localhost:8180/realms/master/protocol/openid-connect/token" -Method Post -ContentType "application/x-www-form-urlencoded" -Body @{
+  grant_type = "password"
+  client_id = "admin-cli"
+  username = "admin"
+  password = "admin"
+}
+$kcHeaders = @{ Authorization = "Bearer $($adminToken.access_token)" }
+$patientUsers = Invoke-RestMethod -Uri "http://localhost:8180/admin/realms/healthnet/users?username=testpatient&exact=true" -Headers $kcHeaders -Method Get
+if (@($patientUsers).Count -eq 0) { throw "Keycloak testpatient account was not found." }
+$patientSubject = @($patientUsers)[0].id
+
 $patient = @{ resourceType = "Patient"; id = $DemoHealthId; identifier = @(@{ system = "https://healthnet.local/health-id"; value = $DemoHealthId }); name = @(@{ use = "official"; family = "Sharma"; given = @("Aarav") }); gender = "male"; birthDate = "1998-04-12" }
 $odishaEncounter = @{ resourceType = "Encounter"; id = "enc-odisha-2024"; status = "finished"; class = @{ system = "http://terminology.hl7.org/CodeSystem/v3-ActCode"; code = "AMB"; display = "ambulatory" }; subject = @{ reference = "Patient/$DemoHealthId" }; period = @{ start = "2024-02-15T10:00:00Z"; end = "2024-02-15T10:30:00Z" }; serviceProvider = @{ display = "Odisha General Hospital" } }
 $odishaCondition = @{ resourceType = "Condition"; id = "condition-diabetes-2024"; clinicalStatus = @{ coding = @(@{ system = "http://terminology.hl7.org/CodeSystem/condition-clinical"; code = "active" }) }; verificationStatus = @{ coding = @(@{ system = "http://terminology.hl7.org/CodeSystem/condition-ver-status"; code = "confirmed" }) }; code = @{ coding = @(@{ system = "http://snomed.info/sct"; code = "44054006"; display = "Type 2 diabetes mellitus" }); text = "Type 2 Diabetes" }; subject = @{ reference = "Patient/$DemoHealthId" }; onsetDateTime = "2024-02-15" }
@@ -70,13 +81,19 @@ INSERT INTO healthnet.policy_rule (id, jurisdiction_id, name, purpose, scope, ef
 SELECT '00000000-0000-0000-0000-000000009002', j.id, 'Demo Karnataka treatment access', 'TREATMENT', 'clinical', 'ALLOW', 'Local mentor demo policy', true FROM healthnet.jurisdiction j WHERE j.code = 'IN-KA' AND NOT EXISTS (SELECT 1 FROM healthnet.policy_rule WHERE name = 'Demo Karnataka treatment access');
 INSERT INTO healthnet.policy_rule (id, jurisdiction_id, name, purpose, scope, effect, description, active)
 SELECT '00000000-0000-0000-0000-000000009003', j.id, 'Demo Maldives treatment access', 'TREATMENT', 'clinical', 'ALLOW', 'Local mentor demo policy', true FROM healthnet.jurisdiction j WHERE j.code = 'MV' AND NOT EXISTS (SELECT 1 FROM healthnet.policy_rule WHERE name = 'Demo Maldives treatment access');
+INSERT INTO healthnet.patient_identity
+  (id, display_health_id, issuing_jurisdiction, given_name, family_name, date_of_birth, sex, email, owner_subject, status)
+VALUES
+  ('00000000-0000-0000-0000-000000000038', 'INOD000038', 'IN-OD', 'Aarav', 'Sharma', '1998-04-12', 'male', 'patient@healthnet.dev', :'owner_subject', 'ACTIVE')
+ON CONFLICT (display_health_id) DO UPDATE SET owner_subject = EXCLUDED.owner_subject, given_name = EXCLUDED.given_name, family_name = EXCLUDED.family_name, date_of_birth = EXCLUDED.date_of_birth;
+
 DELETE FROM healthnet.record_locator WHERE health_id = 'INOD000038';
 INSERT INTO healthnet.record_locator (id, health_id, repository_id, endpoint, resource_types, status, last_verified_at, notes) VALUES
 ('00000000-0000-0000-0000-000000009101', 'INOD000038', '00000000-0000-0000-0000-000000000201', 'http://localhost:8091/fhir', 'Patient,Encounter,Condition,Observation', 'ACTIVE', now(), 'Demo Odisha records'),
 ('00000000-0000-0000-0000-000000009102', 'INOD000038', '00000000-0000-0000-0000-000000000202', 'http://localhost:8092/fhir', 'Patient,Encounter,Observation,MedicationRequest', 'ACTIVE', now(), 'Demo Karnataka records'),
 ('00000000-0000-0000-0000-000000009103', 'INOD000038', '00000000-0000-0000-0000-000000000203', 'http://localhost:8093/fhir', 'Patient,Encounter,Observation', 'ACTIVE', now(), 'Demo Maldives records');
 "@
-$sql | docker exec -i $PostgresContainer psql -U $DbUser -d healthnet_db | Out-Null
+$sql | docker exec -i $PostgresContainer psql -v owner_subject="$patientSubject" -U $DbUser -d healthnet_db | Out-Null
 Write-Host ""
 Write-Host "Federated FHIR demo is ready."
 Write-Host "Health ID: $DemoHealthId"
