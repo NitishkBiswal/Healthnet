@@ -155,12 +155,35 @@ class LongitudinalViewService:
         client = FHIRClient(locator.endpoint or repository.base_url)
         for resource_type in resource_types:
             try:
-                bundle = await client.search(
-                    resource_type,
-                    {"patient": request.health_id},
-                )
-                for entry in bundle.get("entry", []):
-                    resource = entry.get("resource")
+                if resource_type == "Patient":
+                    bundle = await client.search(
+                        "Patient",
+                        {"identifier": f"urn:healthnet:health-id|{request.health_id}"},
+                    )
+                    entries = bundle.get("entry", [])
+                    patient_resources = [
+                        entry.get("resource")
+                        for entry in entries
+                        if isinstance(entry, dict) and isinstance(entry.get("resource"), dict)
+                    ]
+                    if not patient_resources:
+                        try:
+                            patient_resources = [await client.get_resource("Patient", request.health_id)]
+                        except Exception:
+                            patient_resources = []
+                    resources = patient_resources
+                else:
+                    bundle = await client.search(
+                        resource_type,
+                        {"patient": request.health_id},
+                    )
+                    resources = [
+                        entry.get("resource")
+                        for entry in bundle.get("entry", [])
+                        if isinstance(entry, dict) and isinstance(entry.get("resource"), dict)
+                    ]
+
+                for resource in resources:
                     if isinstance(resource, dict):
                         records.append(
                             {
