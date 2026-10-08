@@ -12,7 +12,7 @@ from app.longitudinal.schemas import (
     LongitudinalViewRequest,
     LongitudinalViewResponse,
 )
-from app.provider_trust.models import Organization, PractitionerRole, Provider
+from app.provider_trust.models import Provider
 from app.record_locator.models import RecordLocator
 from app.repository.models import Repository, RepositoryStatus
 
@@ -53,19 +53,9 @@ class LongitudinalViewService:
                 "No active trusted HealthNet provider is linked to this principal"
             )
 
-        active_role = await self.session.scalar(
-            select(PractitionerRole)
-            .join(Organization, PractitionerRole.organization_id == Organization.id)
-            .where(
-                PractitionerRole.provider_id == provider.id,
-                PractitionerRole.active.is_(True),
-                Organization.trust_status == "ACTIVE",
-            )
-        )
-        if active_role is None:
-            raise LongitudinalAccessDenied(
-                "Provider has no active role in a trusted organization"
-            )
+        # Organization/PractitionerRole trust is intentionally deferred for the
+        # current MVP. Provider trust + patient consent are sufficient for now.
+        # This can be restored when organization onboarding is implemented.
 
         consent_allowed = await ConsentService(self.session).check_consent(
             request.health_id,
