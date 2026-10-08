@@ -69,7 +69,7 @@ class LongitudinalViewService:
 
         consent_allowed = await ConsentService(self.session).check_consent(
             request.health_id,
-            subject,
+            provider.external_id,
             request.purpose,
             request.scope,
         )
