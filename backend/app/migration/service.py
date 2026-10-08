@@ -61,6 +61,7 @@ class MigrationService:
         )
         self.session.add(item)
         await self.session.flush()
+        await self.session.refresh(item)
         return item
 
     async def authorize_transfer(
@@ -81,6 +82,7 @@ class MigrationService:
         item.state = MigrationState.PATIENT_AUTHORIZED.value
         item.authorization_reference = authorization_reference
         await self.session.flush()
+        await self.session.refresh(item)
         return item
 
     async def issue_transfer_token(
