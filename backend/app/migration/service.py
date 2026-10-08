@@ -13,7 +13,7 @@ from app.migration.models import (
 )
 from app.migration.schemas import MigrationState, TransferExecuteRequest, TransferRequestCreate
 from app.record_locator.models import RecordLocator
-from app.repository.models import EHRCustody, Repository, RepositoryStatus
+from app.identity.models import PatientIdentity\nfrom app.repository.models import EHRCustody, Repository, RepositoryStatus
 
 
 class MigrationService:
@@ -188,7 +188,7 @@ class MigrationService:
         await self.session.flush()
         return manifest
 
-    async def get_status(self, transfer_id: UUID) -> TransferRequest | None:
+    async def get_patient_transfers(self, actor_id: str) -> list[TransferRequest]:\n        patient = await self.session.scalar(\n            select(PatientIdentity).where(PatientIdentity.owner_subject == actor_id)\n        )\n        if patient is None:\n            return []\n        result = await self.session.scalars(\n            select(TransferRequest)\n            .where(TransferRequest.health_id == patient.display_health_id)\n            .order_by(TransferRequest.created_at.desc())\n        )\n        return list(result.all())\n\n    async def get_status(self, transfer_id: UUID) -> TransferRequest | None:
         return await self.session.get(TransferRequest, transfer_id)
 
     async def get_manifest(self, transfer_id: UUID) -> TransferManifest | None:
