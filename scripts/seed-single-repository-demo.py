@@ -66,7 +66,7 @@ async def put_fhir(resource: dict) -> None:
         response.raise_for_status()
 
 
-async def seed_database(patient_subject: str, provider_subject: str) -> None:
+async def seed_database(patient_subject: str, provider_subject: str) -> str:
     engine = create_async_engine(settings.DATABASE_URL)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
@@ -107,8 +107,12 @@ async def seed_database(patient_subject: str, provider_subject: str) -> None:
             session.add(jurisdiction)
 
         patient = await session.scalar(
-            select(PatientIdentity).where(PatientIdentity.display_health_id == HEALTH_ID)
+            select(PatientIdentity).where(PatientIdentity.owner_subject == patient_subject)
         )
+        if patient is None:
+            patient = await session.scalar(
+                select(PatientIdentity).where(PatientIdentity.display_health_id == HEALTH_ID)
+            )
         if patient is None:
             patient = PatientIdentity(
                 id=uuid4(),
@@ -179,15 +183,18 @@ async def seed_database(patient_subject: str, provider_subject: str) -> None:
         )
 
         await session.commit()
+        seeded_health_id = patient.display_health_id
 
     await engine.dispose()
+    return seeded_health_id
 
 
-FHIR_RESOURCES = [
+def fhir_resources(health_id: str) -> list[dict]:
+    return [
     {
         "resourceType": "Patient",
         "id": HEALTH_ID,
-        "identifier": [{"system": "urn:healthnet:health-id", "value": HEALTH_ID}],
+        "identifier": [{"system": "urn:healthnet:health-id", "value": health_id}],
         "name": [{"family": "Sharma", "given": ["Aarav"]}],
         "gender": "male",
         "birthDate": "1998-04-12",
@@ -263,7 +270,7 @@ async def main() -> None:
 
     print()
     print("HealthNet single-repository demo is ready.")
-    print(f"Health ID: {HEALTH_ID}")
+    print(f"Health ID: {health_id}")
     print("Current repository: IN-OD-FHIR (Odisha Health Records Repository)")
     print("Demo provider ID: PRV-IN-000001")
     print(f"FHIR endpoint: {FHIR_BASE}")
