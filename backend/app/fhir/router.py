@@ -99,6 +99,11 @@ async def submit_patient_record(
                 status_code=422,
                 detail="Patient resource must contain the matching HealthNet Health ID identifier",
             )
+        if payload.get("id") not in (None, health_id):
+            raise HTTPException(
+                status_code=422,
+                detail="Patient resource id must match the canonical Health ID in this prototype",
+            )
     else:
         reference = payload.get("subject") or payload.get("patient")
         reference_value = reference.get("reference") if isinstance(reference, dict) else None
@@ -108,7 +113,7 @@ async def submit_patient_record(
                 detail=f"Clinical resource must reference Patient/{health_id}",
             )
 
-    resource_id = payload.get("id") or str(uuid4())
+    resource_id = payload.get("id") or (health_id if resource_type == "Patient" else str(uuid4()))
     payload["id"] = resource_id
     client = FHIRClient(locator.endpoint or repository.base_url)
     try:
