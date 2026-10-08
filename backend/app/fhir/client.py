@@ -12,6 +12,8 @@ class FHIRClient:
     async def get_resource(self,resource_type:str,resource_id:str)->dict[str,Any]: return await self._request("GET",f"{resource_type}/{resource_id}")
     async def search(self,resource_type:str,params:dict[str,Any])->dict[str,Any]: return await self._request("GET",resource_type,params=params)
     async def create_resource(self,resource_type:str,resource:dict[str,Any])->dict[str,Any]: return await self._request("POST",resource_type,json=resource,headers={"Content-Type":"application/fhir+json"})
+    async def put_resource(self,resource_type:str,resource_id:str,resource:dict[str,Any])->dict[str,Any]:
+        return await self._request("PUT",f"{resource_type}/{resource_id}",json=resource,headers={"Content-Type":"application/fhir+json"})
     async def health_check(self)->bool:
         try: await self.get_metadata(); return True
         except Exception: return False
