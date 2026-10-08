@@ -12,7 +12,16 @@ HealthNet PostgreSQL stores repository and Record Locator metadata. Clinical FHI
 
 ## One-command setup
 
-From the repository root in PowerShell:
+Before the first demo on a fresh checkout, apply the HealthNet database migrations:
+
+```powershell
+cd backend
+.\\.venv\\Scripts\\Activate.ps1
+alembic upgrade head
+cd ..
+```
+
+Then, from the repository root in PowerShell:
 
 ```powershell
 .\scripts\seed-demo-fhir.ps1
@@ -30,7 +39,7 @@ The script starts PostgreSQL, creates missing FHIR databases, starts the three r
 
 ## Mentor demo
 
-1. Run `scripts\seed-demo-fhir.ps1`.
+1. Run `scripts\seed-demo-fhir.ps1`. It also links `INOD000038` to the Keycloak `testpatient` account.
 2. Start the backend with `cd backend`, `\.venv\Scripts\Activate.ps1`, then `uvicorn app.main:app --reload`.
 3. Start the frontend with `cd frontend` then `npm run dev`.
 4. Log in as `testpatient / patient`.
