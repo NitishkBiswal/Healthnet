@@ -79,7 +79,8 @@ export interface DuplicateReview {
   reviewed_at?: string;
 }
 export interface Repository { id: string; code: string; name: string; jurisdiction: string; base_url: string; status: string; description?: string; }
-export interface Consent { id: string; health_id: string; grantee_type: string; grantee_id: string; purpose: string; scopes: string[]; status: string; valid_from: string; valid_until?: string; revoked_at?: string; }
+export interface Consent { id: string; health_id: string; grantee_type: string; grantee_id: string; purpose: string; scopes: string[]; status: string; valid_from: string; valid_until?: string; revoked_at?: string; reason?: string; }
+export interface AuthorizedPatient { health_id: string; given_name: string; family_name: string; consent_id: string; purpose: string; scopes: string[]; valid_from: string; valid_until?: string; }
 export interface AuditEvent { id: string; event_type: string; health_id?: string; actor_id: string; action: string; payload: string; event_hash: string; created_at: string; }
 export interface Transfer { id: string; health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; state: string; authorization_reference?: string; package_hash?: string; error_message?: string; created_at: string; updated_at: string; }
 
@@ -95,7 +96,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ decision, reviewer_note }),
     }),
+  createConsent: (body: { health_id: string; grantee_type: string; grantee_id: string; purpose: string; scopes: string[]; valid_from: string; valid_until?: string; reason?: string }) =>
+    request<Consent>("/consent/consents", { method: "POST", body: JSON.stringify(body) }),
+  revokeConsent: (id: string) => request<Consent>("/consent/consents/" + encodeURIComponent(id), { method: "DELETE" }),
   consents: (healthId: string) => request<Consent[]>("/consent/patients/" + encodeURIComponent(healthId) + "/consents"),
+  authorizedPatients: () => request<AuthorizedPatient[]>("/consent/authorized-patients"),
   emergency: (healthId: string) => request<Record<string, unknown>>("/emergency/patients/" + encodeURIComponent(healthId) + "/emergency-profile"),
   longitudinal: (healthId: string, purpose = "TREATMENT", scope = "clinical") => request<Record<string, unknown>>("/longitudinal/patients/longitudinal-view", { method: "POST", body: JSON.stringify({ health_id: healthId, purpose, scope }) }),
   repositories: () => request<Repository[]>("/repository/repositories"),
