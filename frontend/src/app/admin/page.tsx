@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type Provider, type Repository } from "@/lib/api";
+import { api, type CurrentRecordLocation, type Provider, type Repository, type Transfer } from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
 export default function AdminPortal() {
@@ -13,6 +13,9 @@ export default function AdminPortal() {
   const [destination, setDestination] = useState("");
   const [result, setResult] = useState<unknown>(null);
   const [error, setError] = useState("");
+  const [currentLocation, setCurrentLocation] = useState<CurrentRecordLocation | null>(null);
+  const [transfer, setTransfer] = useState<Transfer | null>(null);
+  const [migrationMessage, setMigrationMessage] = useState("");
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -140,9 +143,21 @@ export default function AdminPortal() {
             </div>
           </Card>
 
-          <Card title="Start EHR migration">
-            <div className="space-y-3">
+          <Card title="Patient record custody & migration">
+            <p className="text-sm text-slate-700">
+              Each patient has one authoritative repository. HealthNet does not scan other repositories when a doctor requests the record.
+            </p>
+            <div className="mt-3 flex gap-2">
               <Field value={healthId} onChange={(e) => setHealthId(e.target.value)} placeholder="Patient Health ID" />
+              <button onClick={loadCurrentLocation} className="rounded-lg border-2 border-slate-400 px-4 py-2 text-sm font-bold text-slate-900">Find current repository</button>
+            </div>
+            {currentLocation && (
+              <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm">
+                <p className="font-bold text-slate-950">Current: {currentLocation.repository_name}</p>
+                <p className="text-slate-700">{currentLocation.repository_code} · {currentLocation.jurisdiction}</p>
+              </div>
+            )}
+            <div className="mt-5 space-y-3">
               <select value={source} onChange={(e) => setSource(e.target.value)} className="w-full rounded-lg border-2 border-slate-400 bg-white px-3 py-2 text-sm font-medium text-slate-950">
                 <option value="">Source repository</option>
                 {repos.map((r) => <option key={r.id} value={r.id}>{r.code} — {r.name}</option>)}
@@ -151,13 +166,33 @@ export default function AdminPortal() {
                 <option value="">Destination repository</option>
                 {repos.map((r) => <option key={r.id} value={r.id}>{r.code} — {r.name}</option>)}
               </select>
-              <button onClick={migrate} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">
-                Create migration request
-              </button>
+              <button onClick={migrate} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">Request repository move</button>
+              {transfer && (
+                <div className="rounded-lg border border-cyan-300 bg-cyan-50 p-3 text-sm">
+                  <p className="font-bold text-slate-950">Migration state: {transfer.state}</p>
+                  {transfer.state === "PATIENT_AUTHORIZED" && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await api.issueTransferToken(transfer.id);
+                          const completed = await api.executeTransfer(transfer.id, { resource_count: 8, package_hash: "DEMO-FHIR-PACKAGE-INTEGRITY-0001" });
+                          setTransfer({ ...transfer, state: "COMPLETED", package_hash: "DEMO-FHIR-PACKAGE-INTEGRITY-0001" });
+                          setResult(completed);
+                          setMigrationMessage("Migration completed. The patient's active repository pointer now targets the destination.");
+                        } catch (e) {
+                          setMigrationMessage(e instanceof Error ? e.message : "Migration execution failed");
+                        }
+                      }}
+                      className="mt-3 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white"
+                    >
+                      Complete validated migration
+                    </button>
+                  )}
+                  <p className="mt-2 text-slate-700">{migrationMessage}</p>
+                </div>
+              )}
               {result !== null && (
-                <pre className="overflow-auto rounded-lg border-2 border-slate-300 bg-slate-100 p-3 text-xs font-medium text-slate-900">
-                  {JSON.stringify(result, null, 2)}
-                </pre>
+                <pre className="overflow-auto rounded-lg border-2 border-slate-300 bg-slate-100 p-3 text-xs font-medium text-slate-900">{JSON.stringify(result, null, 2)}</pre>
               )}
             </div>
           </Card>
