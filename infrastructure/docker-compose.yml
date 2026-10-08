@@ -73,8 +73,7 @@ services:
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
-        sed -i 's/\r$//' /opt/keycloak/bootstrap-test-users.sh
-        exec /bin/bash /opt/keycloak/bootstrap-test-users.sh
+        sed 's/\r$//' /opt/keycloak/bootstrap-test-users.sh | exec /bin/bash
     volumes:
       - ./keycloak/bootstrap-test-users.sh:/opt/keycloak/bootstrap-test-users.sh:ro
     depends_on:
