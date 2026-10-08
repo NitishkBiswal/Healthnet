@@ -10,7 +10,7 @@ until /opt/keycloak/bin/kcadm.sh config credentials \
   sleep 3
 done
 
-until /opt/keycloak/bin/kcadm.sh get realm/healthnet >/dev/null 2>&1; do
+until /opt/keycloak/bin/kcadm.sh get realms/healthnet >/dev/null 2>&1; do
   sleep 3
 done
 
