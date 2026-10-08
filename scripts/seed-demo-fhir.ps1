@@ -15,8 +15,8 @@ function Wait-Postgres {
 }
 
 function Ensure-Database([string]$Name) {
-  $exists = docker exec $PostgresContainer psql -U $DbUser -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = ''$Name'';"
-  if ($exists.Trim() -ne "1") {
+  $databases = @(docker exec $PostgresContainer psql -U $DbUser -d postgres -tAc "SELECT datname FROM pg_database;" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+  if ($databases -notcontains $Name) {
     docker exec $PostgresContainer psql -U $DbUser -d postgres -c "CREATE DATABASE $Name;" | Out-Null
   }
   docker exec $PostgresContainer psql -U $DbUser -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $Name TO $DbUser;" | Out-Null
