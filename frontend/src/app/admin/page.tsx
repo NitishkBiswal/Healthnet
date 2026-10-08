@@ -208,7 +208,7 @@ export default function AdminPortal() {
               {transfer && (
                 <div className="rounded-lg border border-cyan-300 bg-cyan-50 p-3 text-sm">
                   <p className="font-bold text-slate-950">Migration state: {transfer.state}</p>
-                  {transfer.state === "PATIENT_AUTHORIZED" && (
+                  {(transfer.state === "PATIENT_AUTHORIZED" || transfer.state === "TRANSFER_AUTH_ISSUED") && (
                     <button
                       onClick={async () => {
                         try {
