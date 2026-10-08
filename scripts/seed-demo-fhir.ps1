@@ -89,9 +89,9 @@ ON CONFLICT (display_health_id) DO UPDATE SET owner_subject = EXCLUDED.owner_sub
 
 DELETE FROM healthnet.record_locator WHERE health_id = 'INOD000038';
 INSERT INTO healthnet.record_locator (id, health_id, repository_id, endpoint, resource_types, status, last_verified_at, notes) VALUES
-('00000000-0000-0000-0000-000000009101', 'INOD000038', '00000000-0000-0000-0000-000000000201', 'http://localhost:8091/fhir', 'Patient,Encounter,Condition,Observation', 'ACTIVE', now(), 'Demo Odisha records'),
-('00000000-0000-0000-0000-000000009102', 'INOD000038', '00000000-0000-0000-0000-000000000202', 'http://localhost:8092/fhir', 'Patient,Encounter,Observation,MedicationRequest', 'ACTIVE', now(), 'Demo Karnataka records'),
-('00000000-0000-0000-0000-000000009103', 'INOD000038', '00000000-0000-0000-0000-000000000203', 'http://localhost:8093/fhir', 'Patient,Encounter,Observation', 'ACTIVE', now(), 'Demo Maldives records');
+('00000000-0000-0000-0000-000000009101', 'INOD000038', '00000000-0000-0000-0000-000000000201', 'http://localhost:8091/fhir', 'Encounter,Condition,Observation', 'ACTIVE', now(), 'Demo Odisha records'),
+('00000000-0000-0000-0000-000000009102', 'INOD000038', '00000000-0000-0000-0000-000000000202', 'http://localhost:8092/fhir', 'Encounter,Observation,MedicationRequest', 'ACTIVE', now(), 'Demo Karnataka records'),
+('00000000-0000-0000-0000-000000009103', 'INOD000038', '00000000-0000-0000-0000-000000000203', 'http://localhost:8093/fhir', 'Encounter,Observation', 'ACTIVE', now(), 'Demo Maldives records');
 "@
 $sql | docker exec -i $PostgresContainer psql -v owner_subject="$patientSubject" -U $DbUser -d healthnet_db | Out-Null
 Write-Host ""
