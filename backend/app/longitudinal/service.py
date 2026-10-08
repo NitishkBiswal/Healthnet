@@ -22,7 +22,7 @@ class LongitudinalAccessDenied(ValueError):
 
 
 class LongitudinalViewService:
-    """Query-time federation. NEVER permanently copies records into a central database."""
+    """Retrieves a patient's record from exactly one authoritative repository."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -53,10 +53,6 @@ class LongitudinalViewService:
                 "No active trusted HealthNet provider is linked to this principal"
             )
 
-        # Organization/PractitionerRole trust is intentionally deferred for the
-        # current MVP. Provider trust + patient consent are sufficient for now.
-        # This can be restored when organization onboarding is implemented.
-
         consent_allowed = await ConsentService(self.session).check_consent(
             request.health_id,
             provider.external_id,
@@ -77,86 +73,115 @@ class LongitudinalViewService:
     ) -> LongitudinalViewResponse:
         provider = await self._authorize_doctor(request, user)
 
-        locators = list(
-            (
-                await self.session.scalars(
-                    select(RecordLocator).where(
-                        RecordLocator.health_id == request.health_id,
-                        RecordLocator.status == "ACTIVE",
-                    )
-                )
-            ).all()
+        locator = await self.session.scalar(
+            select(RecordLocator)
+            .where(
+                RecordLocator.health_id == request.health_id,
+                RecordLocator.status == "ACTIVE",
+            )
+            .order_by(RecordLocator.created_at.desc())
         )
-        repositories_checked = len(locators)
-        records: list[dict[str, Any]] = []
-        errors: list[str] = []
-        repositories_available = 0
 
-        for locator in locators:
-            repository = await self.session.get(Repository, locator.repository_id)
-            if repository is None:
-                errors.append(f"Repository {locator.repository_id} not found")
-                continue
-            if repository.status == RepositoryStatus.OFFLINE:
-                errors.append(f"Repository {repository.code} is offline")
-                continue
+        if locator is None:
+            return LongitudinalViewResponse(
+                health_id=request.health_id,
+                completeness=DataCompleteness.UNAVAILABLE,
+                current_repository=None,
+                records=[],
+                repositories_checked=0,
+                repositories_available=0,
+                errors=["No current repository is assigned to this patient"],
+            )
 
-            policy_allowed, policy_reason, _ = (
-                await JurisdictionPolicyService(self.session).evaluate_policy(
-                    PolicyEvaluationRequest(
-                        source_jurisdiction=repository.jurisdiction,
-                        destination_jurisdiction=provider.jurisdiction,
-                        purpose=request.purpose,
-                        scope=request.scope,
-                    )
+        repository = await self.session.get(Repository, locator.repository_id)
+        if repository is None:
+            return LongitudinalViewResponse(
+                health_id=request.health_id,
+                completeness=DataCompleteness.UNAVAILABLE,
+                current_repository=None,
+                records=[],
+                repositories_checked=1,
+                repositories_available=0,
+                errors=["The patient's current repository is not registered"],
+            )
+
+        current_repository = {
+            "code": repository.code,
+            "name": repository.name,
+            "jurisdiction": repository.jurisdiction,
+            "endpoint": locator.endpoint or repository.base_url,
+        }
+
+        if repository.status == RepositoryStatus.OFFLINE:
+            return LongitudinalViewResponse(
+                health_id=request.health_id,
+                current_repository=current_repository,
+                completeness=DataCompleteness.UNAVAILABLE,
+                records=[],
+                repositories_checked=1,
+                repositories_available=0,
+                errors=[f"Current repository {repository.code} is offline"],
+            )
+
+        policy_allowed, policy_reason, _ = (
+            await JurisdictionPolicyService(self.session).evaluate_policy(
+                PolicyEvaluationRequest(
+                    source_jurisdiction=repository.jurisdiction,
+                    destination_jurisdiction=provider.jurisdiction,
+                    purpose=request.purpose,
+                    scope=request.scope,
                 )
             )
-            if not policy_allowed:
-                errors.append(f"{repository.code}: {policy_reason}")
-                continue
+        )
+        if not policy_allowed:
+            return LongitudinalViewResponse(
+                health_id=request.health_id,
+                current_repository=current_repository,
+                completeness=DataCompleteness.UNAVAILABLE,
+                records=[],
+                repositories_checked=1,
+                repositories_available=1,
+                errors=[f"{repository.code}: {policy_reason}"],
+            )
 
-            repositories_available += 1
-            resource_types = [
-                value.strip()
-                for value in locator.resource_types.split(",")
-                if value.strip()
-            ] or ["Observation"]
-            client = FHIRClient(locator.endpoint or repository.base_url)
+        records: list[dict[str, Any]] = []
+        errors: list[str] = []
+        resource_types = [
+            value.strip()
+            for value in locator.resource_types.split(",")
+            if value.strip()
+        ] or ["Observation"]
 
-            for resource_type in resource_types:
-                try:
-                    bundle = await client.search(
-                        resource_type,
-                        {"patient": request.health_id},
-                    )
-                    for entry in bundle.get("entry", []):
-                        resource = entry.get("resource")
-                        if isinstance(resource, dict):
-                            records.append(
-                                {
-                                    "repository": repository.code,
-                                    "resource_type": resource_type,
-                                    "resource": resource,
-                                }
-                            )
-                except Exception as exc:
-                    errors.append(
-                        f"{repository.code}/{resource_type}: {type(exc).__name__}"
-                    )
+        client = FHIRClient(locator.endpoint or repository.base_url)
+        for resource_type in resource_types:
+            try:
+                bundle = await client.search(
+                    resource_type,
+                    {"patient": request.health_id},
+                )
+                for entry in bundle.get("entry", []):
+                    resource = entry.get("resource")
+                    if isinstance(resource, dict):
+                        records.append(
+                            {
+                                "repository": repository.code,
+                                "resource_type": resource_type,
+                                "resource": resource,
+                            }
+                        )
+            except Exception as exc:
+                errors.append(
+                    f"{repository.code}/{resource_type}: {type(exc).__name__}"
+                )
 
-        if repositories_checked == 0 or repositories_available == 0:
-            completeness = DataCompleteness.UNAVAILABLE
-        elif errors:
-            completeness = DataCompleteness.PARTIAL
-        else:
-            completeness = DataCompleteness.COMPLETE
-
+        completeness = DataCompleteness.PARTIAL if errors else DataCompleteness.COMPLETE
         return LongitudinalViewResponse(
             health_id=request.health_id,
+            current_repository=current_repository,
             completeness=completeness,
             records=records,
-            repositories_checked=repositories_checked,
-            repositories_available=repositories_available,
+            repositories_checked=1,
+            repositories_available=1,
             errors=errors,
         )
 
