@@ -4,11 +4,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.schemas import AuditEventCreate, AuditEventType
+from app.audit.service import AuditService
 from app.core.database import get_db
 from app.fhir.client import FHIRClient
 from app.fhir.schemas import FHIRResource
 from app.identity.service import IdentityService
 from app.provider_trust.models import Provider
+from app.provenance.schemas import ProvenanceRecord
+from app.provenance.service import ProvenanceService
 from app.record_locator.models import RecordLocator
 from app.repository.models import Repository
 from app.security.dependencies import get_current_user
@@ -117,6 +121,34 @@ async def submit_patient_record(
     if resource_type not in known_types:
         known_types.append(resource_type)
         locator.resource_types = ",".join(sorted(set(known_types)))
+
+    actor_id = str(user.get("sub", "unknown"))
+    source_system = "HEALTHNET_ADMIN" if _is_admin_or_system(user) else "HEALTHNET_TRUSTED_PROVIDER"
+    await ProvenanceService(session).record_provenance(
+        ProvenanceRecord(
+            health_id=health_id,
+            repository_id=repository.id,
+            resource_type=resource_type,
+            resource_id=str(saved.get("id", resource_id)),
+            source_system=source_system,
+            actor_id=actor_id,
+            action="HOSPITAL_INGEST",
+            details={"repository_code": repository.code, "submission_mode": "FHIR_API"},
+        )
+    )
+    await AuditService(session).log_event(
+        AuditEventCreate(
+            event_type=AuditEventType.ACCESS,
+            health_id=health_id,
+            actor_id=actor_id,
+            action="FHIR_RECORD_SUBMITTED",
+            payload={
+                "repository_code": repository.code,
+                "resource_type": resource_type,
+                "resource_id": str(saved.get("id", resource_id)),
+            },
+        )
+    )
     await session.commit()
     return {
         "accepted": True,
