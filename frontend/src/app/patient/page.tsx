@@ -22,7 +22,11 @@ export default function PatientPortal() {
   const [migrationMessage, setMigrationMessage] = useState("");
 
   useEffect(() => {
-    void api.myPatient().then(setPatient).catch(() => {});
+    void api.myPatient().then(async (value) => {
+      setPatient(value);
+      try { setCurrentLocation(await api.currentRecordLocation(value.display_health_id)); } catch {}
+      try { setTransfers(await api.myTransfers()); } catch {}
+    }).catch(() => {});
     void api.myDuplicateReviews().then(setReviews).catch(() => {});
   }, []);
 
