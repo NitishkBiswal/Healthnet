@@ -1,11 +1,5 @@
-"""Single authoritative repository per patient.
-
-Revision ID: 0007_single_repository_custody
-Revises: 0006_segment14
-"""
-
 from alembic import op
-
+import sqlalchemy as sa
 
 revision = "0007_single_repository_custody"
 down_revision = "0006_segment14"
@@ -20,7 +14,7 @@ def upgrade() -> None:
         ["health_id"],
         unique=True,
         schema="healthnet",
-        postgresql_where=op.f("status") == "ACTIVE",
+        postgresql_where=sa.text("status = 'ACTIVE'"),
     )
 
 
