@@ -228,17 +228,17 @@ class MigrationService:
 
                 bundle = await source_client.search(resource_type, {"patient": item.health_id})
                 for entry in bundle.get("entry", []):
-                    resource = entry.get("resource") if isinstance(entry, dict) else None
-                    if not isinstance(resource, dict):
+                    clinical_resource = entry.get("resource") if isinstance(entry, dict) else None
+                    if not isinstance(clinical_resource, dict):
                         continue
-                    reference = resource.get("subject") or resource.get("patient")
+                    reference = clinical_resource.get("subject") or clinical_resource.get("patient")
                     reference_value = reference.get("reference") if isinstance(reference, dict) else None
                     if reference_value != f"Patient/{item.health_id}":
                         continue
-                    resource_id = resource.get("id")
+                    resource_id = clinical_resource.get("id")
                     if not resource_id:
                         raise ValueError(f"{resource_type} resource has no FHIR id")
-                    exported_by_key[(resource_type, resource_id)] = resource
+                    exported_by_key[(resource_type, resource_id)] = clinical_resource
             except ValueError:
                 raise
             except Exception as exc:
