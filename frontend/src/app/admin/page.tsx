@@ -43,14 +43,18 @@ export default function AdminPortal() {
 
   async function migrate() {
     setError("");
+    setMigrationMessage("");
     try {
-      setResult(await api.createTransfer({
-        health_id: healthId,
+      const created = await api.createTransfer({
+        health_id: healthId.trim(),
         source_repository_id: source,
         destination_repository_id: destination,
         purpose: "MIGRATION",
         scope: "FHIR",
-      }));
+      });
+      setTransfer(created);
+      setResult(created);
+      setMigrationMessage("Migration request created. Patient authorization is required.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Migration request failed");
     }
@@ -190,9 +194,11 @@ export default function AdminPortal() {
                         try {
                           await api.issueTransferToken(transfer.id);
                           const completed = await api.executeTransfer(transfer.id, { resource_count: 8, package_hash: "DEMO-FHIR-PACKAGE-INTEGRITY-0001" });
+                          const updatedLocation = await api.currentRecordLocation(healthId.trim());
                           setTransfer({ ...transfer, state: "COMPLETED", package_hash: "DEMO-FHIR-PACKAGE-INTEGRITY-0001" });
+                          setCurrentLocation(updatedLocation);
                           setResult(completed);
-                          setMigrationMessage("Migration completed. The patient's active repository pointer now targets the destination.");
+                          setMigrationMessage(`Migration completed. The patient's active repository is now ${updatedLocation.repository_name} (${updatedLocation.repository_code}).`);
                         } catch (e) {
                           setMigrationMessage(e instanceof Error ? e.message : "Migration execution failed");
                         }
