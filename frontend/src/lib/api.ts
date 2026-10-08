@@ -105,6 +105,6 @@ export const api = {
     request<Transfer>("/migration/transfer-authorizations/" + encodeURIComponent(id), { method: "POST", body: JSON.stringify({ authorization_reference }) }),
   transferStatus: (id: string) => request<Transfer>("/migration/transfers/" + id + "/status"),
   issueTransferToken: (id: string) => request<{ transfer_id: string; authorization_token: string; expires_at: string }>("/migration/transfers/" + id + "/issue-token", { method: "POST" }),
-  executeTransfer: (id: string, body: { resource_count: number; package_hash: string }) =>
+  executeTransfer: (id: string, body: { authorization_token: string; resource_count: number; package_hash?: string }) =>
     request<Record<string, unknown>>("/migration/transfers/" + id + "/execute", { method: "POST", body: JSON.stringify(body) }),
 };
