@@ -203,7 +203,7 @@ export async function completeLogin(code: string, state: string): Promise<UserRo
   );
   sessionStorage.removeItem(K.state);
   sessionStorage.removeItem(K.verifier);
-  sessionStorage.removeItem(K.role);
+  sessionStorage.setItem(K.role, expectedRole);
   return expectedRole;
 }
 
@@ -217,6 +217,9 @@ export function getSessionRole(): UserRole | null {
   if (typeof window === "undefined") return null;
   const token = getAccessToken();
   if (!token) return null;
+
+  const selectedRole = sessionStorage.getItem(K.role) as UserRole | null;
+  if (selectedRole && ROLE_CONFIG[selectedRole]) return selectedRole;
 
   try {
     const payload = decodeJwtPayload(token);
