@@ -83,13 +83,65 @@ services:
       - healthnet
     restart: "no"
 
-  hapi-fhir:
+  hapi-fhir-odisha:
     image: hapiproject/hapi:latest
-    container_name: healthnet-hapi-fhir
+    container_name: healthnet-hapi-fhir-odisha
     ports:
-      - "8090:8080"
+      - "8091:8080"
     environment:
-      spring.datasource.url: jdbc:postgresql://postgres:5432/hapi_fhir_db
+      spring.datasource.url: jdbc:postgresql://postgres:5432/hapi_odisha_db
+      spring.datasource.username: healthnet
+      spring.datasource.password: healthnet_dev_password
+      spring.datasource.driverClassName: org.postgresql.Driver
+      spring.jpa.properties.hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
+      hapi.fhir.fhir_version: R4
+      hapi.fhir.allow_external_references: "true"
+      hapi.fhir.allow_multiple_delete: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/fhir/metadata || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - healthnet
+
+  hapi-fhir-karnataka:
+    image: hapiproject/hapi:latest
+    container_name: healthnet-hapi-fhir-karnataka
+    ports:
+      - "8092:8080"
+    environment:
+      spring.datasource.url: jdbc:postgresql://postgres:5432/hapi_karnataka_db
+      spring.datasource.username: healthnet
+      spring.datasource.password: healthnet_dev_password
+      spring.datasource.driverClassName: org.postgresql.Driver
+      spring.jpa.properties.hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
+      hapi.fhir.fhir_version: R4
+      hapi.fhir.allow_external_references: "true"
+      hapi.fhir.allow_multiple_delete: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/fhir/metadata || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - healthnet
+
+  hapi-fhir-maldives:
+    image: hapiproject/hapi:latest
+    container_name: healthnet-hapi-fhir-maldives
+    ports:
+      - "8093:8080"
+    environment:
+      spring.datasource.url: jdbc:postgresql://postgres:5432/hapi_maldives_db
       spring.datasource.username: healthnet
       spring.datasource.password: healthnet_dev_password
       spring.datasource.driverClassName: org.postgresql.Driver
