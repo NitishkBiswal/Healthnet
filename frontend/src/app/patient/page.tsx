@@ -34,7 +34,7 @@ export default function PatientPortal() {
 
   async function grantConsent() {
     if (!patient || !doctorId.trim()) {
-      setConsentMessage("Enter the doctor's HealthNet ID.");
+      setConsentMessage("Enter the doctor's HealthNet Provider ID.");
       return;
     }
     setConsentMessage("");
@@ -65,10 +65,7 @@ export default function PatientPortal() {
     >
       {!patient && (
         <div className="mb-5 flex flex-wrap gap-3">
-          <Link
-            href="/patient/onboarding"
-            className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400"
-          >
+          <Link href="/patient/onboarding" className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">
             Get my Health ID
           </Link>
         </div>
@@ -80,10 +77,7 @@ export default function PatientPortal() {
             {reviews.map((review) => (
               <div key={review.id} className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
                 <p className="font-semibold">Duplicate review: {review.status}</p>
-                <p className="mt-1">
-                  Confidence {review.confidence.toFixed(2)} · submitted{" "}
-                  {new Date(review.created_at).toLocaleString()}
-                </p>
+                <p className="mt-1">Confidence {review.confidence.toFixed(2)} · submitted {new Date(review.created_at).toLocaleString()}</p>
                 <p className="mt-1">The Auditor Portal is reviewing this identity match.</p>
               </div>
             ))}
@@ -96,17 +90,11 @@ export default function PatientPortal() {
           {patient ? (
             <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-5">
               <p className="text-sm text-slate-600">Your permanent Health ID</p>
-              <p className="mt-1 text-3xl font-bold tracking-wide text-slate-950">
-                {patient.display_health_id}
-              </p>
-              <p className="mt-2 text-sm text-slate-700">
-                {patient.given_name} {patient.family_name} · {patient.issuing_jurisdiction}
-              </p>
+              <p className="mt-1 text-3xl font-bold tracking-wide text-slate-950">{patient.display_health_id}</p>
+              <p className="mt-2 text-sm text-slate-700">{patient.given_name} {patient.family_name} · {patient.issuing_jurisdiction}</p>
             </div>
           ) : (
-            <p className="text-sm text-slate-600">
-              You have not registered a Health ID yet. Use <strong>Get my Health ID</strong> above.
-            </p>
+            <p className="text-sm text-slate-600">You have not registered a Health ID yet. Use <strong>Get my Health ID</strong> above.</p>
           )}
         </Card>
 
@@ -115,10 +103,10 @@ export default function PatientPortal() {
             <div className="mb-5 rounded-xl border border-cyan-200 bg-cyan-50 p-4">
               <h3 className="font-bold text-slate-950">Grant a doctor access</h3>
               <p className="mt-1 text-sm text-slate-700">
-                Enter the doctor's HealthNet identifier from their Doctor Workspace.
+                Enter the doctor's HealthNet Provider ID from their Doctor Workspace.
               </p>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <input value={doctorId} onChange={(e) => setDoctorId(e.target.value)} placeholder="Doctor HealthNet identifier" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <input value={doctorId} onChange={(e) => setDoctorId(e.target.value)} placeholder="Doctor Provider ID (e.g. PRV-IN-000001)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                 <select value={purpose} onChange={(e) => setPurpose(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
                   <option value="TREATMENT">Treatment</option>
                   <option value="EMERGENCY">Emergency</option>
