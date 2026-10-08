@@ -67,6 +67,10 @@ export interface Principal {
 }
 export interface AuditEvent { id: string; event_type: string; health_id?: string; actor_id: string; action: string; payload: string; event_hash: string; created_at: string; }
 export interface Transfer { id: string; health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; state: string; authorization_reference?: string; package_hash?: string; error_message?: string; created_at: string; updated_at: string; }
+export interface CurrentRecordLocation {
+  health_id: string; repository_id: string; repository_code: string; repository_name: string;
+  jurisdiction: string; endpoint: string; resource_types: string[]; assigned_at?: string;
+}
 
 export const api = {
   currentPrincipal: () => request<Principal>("/authorization/me"),
