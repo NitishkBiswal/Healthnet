@@ -9,6 +9,8 @@ from app.provider_trust.schemas import (
     OrganizationResponse,
     ProviderCreate,
     ProviderResponse,
+    ProviderOnboardRequest,
+    ProviderOnboardResponse,
     PractitionerRoleCreate,
     PractitionerRoleResponse,
     TrustStatus,
@@ -73,6 +75,17 @@ async def register_provider(
         await session.rollback()
         raise HTTPException(409, str(exc)) from exc
 
+
+@router.post("/providers/onboard",response_model=ProviderOnboardResponse,status_code=status.HTTP_201_CREATED)
+async def onboard_provider(request: ProviderOnboardRequest, _: dict = Depends(require_admin), session: AsyncSession = Depends(get_db)):
+    try:
+        provider, username = await ProviderTrustService(session).onboard_provider(request)
+        await session.commit()
+        return ProviderOnboardResponse(provider=ProviderResponse.model_validate(provider),username=username,
+            message="Doctor account and HealthNet Provider ID created successfully.")
+    except ValueError as exc:
+        await session.rollback()
+        raise HTTPException(409,str(exc)) from exc
 
 @router.get("/providers", response_model=list[ProviderResponse])
 async def list_providers(
