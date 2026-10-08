@@ -12,6 +12,11 @@ export default function PatientPortal() {
   const [consents, setConsents] = useState<unknown>(null);
   const [emergency, setEmergency] = useState<unknown>(null);
   const [error, setError] = useState("");
+  const [doctorId, setDoctorId] = useState("");
+  const [purpose, setPurpose] = useState("TREATMENT");
+  const [scope, setScope] = useState("clinical");
+  const [validUntil, setValidUntil] = useState("");
+  const [consentMessage, setConsentMessage] = useState("");
 
   useEffect(() => {
     void api.myPatient().then(setPatient).catch(() => {});
@@ -24,6 +29,31 @@ export default function PatientPortal() {
       setter(await fn());
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "Request failed");
+    }
+  }
+
+  async function grantConsent() {
+    if (!patient || !doctorId.trim()) {
+      setConsentMessage("Enter the doctor's HealthNet ID.");
+      return;
+    }
+    setConsentMessage("");
+    try {
+      await api.createConsent({
+        health_id: patient.display_health_id,
+        grantee_type: "PROVIDER",
+        grantee_id: doctorId.trim(),
+        purpose,
+        scopes: [scope],
+        valid_from: new Date().toISOString(),
+        ...(validUntil ? { valid_until: new Date(validUntil).toISOString() } : {}),
+      });
+      setConsentMessage("Consent granted successfully.");
+      setDoctorId("");
+      setValidUntil("");
+      setConsents(await api.consents(patient.display_health_id));
+    } catch (reason: unknown) {
+      setConsentMessage(reason instanceof Error ? reason.message : "Unable to grant consent");
     }
   }
 
@@ -81,6 +111,31 @@ export default function PatientPortal() {
         </Card>
 
         <Card title="Consent & emergency profile">
+          {patient && (
+            <div className="mb-5 rounded-xl border border-cyan-200 bg-cyan-50 p-4">
+              <h3 className="font-bold text-slate-950">Grant a doctor access</h3>
+              <p className="mt-1 text-sm text-slate-700">
+                Enter the doctor's HealthNet identifier from their Doctor Workspace.
+              </p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <input value={doctorId} onChange={(e) => setDoctorId(e.target.value)} placeholder="Doctor HealthNet identifier" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <select value={purpose} onChange={(e) => setPurpose(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  <option value="TREATMENT">Treatment</option>
+                  <option value="EMERGENCY">Emergency</option>
+                  <option value="RESEARCH">Research</option>
+                </select>
+                <select value={scope} onChange={(e) => setScope(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  <option value="clinical">Clinical records</option>
+                  <option value="medications">Medications</option>
+                  <option value="laboratory">Laboratory results</option>
+                  <option value="full">Full record</option>
+                </select>
+                <input type="datetime-local" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              </div>
+              <button onClick={grantConsent} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">Grant consent</button>
+              {consentMessage && <p className="mt-2 text-sm text-slate-700">{consentMessage}</p>}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             <button onClick={() => run(() => api.consents(patient?.display_health_id || ""), setConsents)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50">
               View consent
