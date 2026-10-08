@@ -177,6 +177,8 @@ class MigrationService:
             for value in current.resource_types.split(",")
             if value.strip()
         ] or ["Patient", "Observation"]
+        if "Patient" not in resource_types:
+            resource_types.insert(0, "Patient")
 
         def canonical(resources: list[dict]) -> str:
             ordered = sorted(resources, key=lambda value: (value.get("resourceType", ""), value.get("id", "")))
