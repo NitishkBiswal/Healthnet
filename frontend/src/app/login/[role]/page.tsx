@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
-import { beginLogin, ROLE_CONFIG, type UserRole } from "@/lib/auth";
+import { beginLogin, beginRegistration, ROLE_CONFIG, type UserRole } from "@/lib/auth";
 
 const validRoles: UserRole[] = ["patient", "provider", "admin", "auditor"];
 
@@ -73,6 +73,17 @@ export default function RoleLoginPage() {
         >
           {starting ? "Redirecting…" : "Sign in as " + config.label}
         </button>
+        {role === "patient" && (
+          <div className="mt-5 border-t border-slate-700 pt-5 text-center">
+            <p className="text-sm text-slate-400">First time using HealthNet?</p>
+            <button
+              onClick={() => void beginRegistration()}
+              className="mt-2 text-sm font-bold text-cyan-300 hover:text-cyan-200"
+            >
+              Create a Patient Account
+            </button>
+          </div>
+        )}
       </div>
     </main>
   );
