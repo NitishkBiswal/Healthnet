@@ -76,7 +76,6 @@ export default function PatientPortal() {
               You have not registered a Health ID yet. Use <strong>Get my Health ID</strong> above.
             </p>
           )}
->
         </Card>
 
         <Card title="Consent & emergency profile">
