@@ -167,7 +167,7 @@ async def get_patient(
     roles = set(user.get("roles", []))
     subject = str(user.get("sub", ""))
 
-    if Role.PATIENT.value in roles and patient.owner_subject != subject:
+    if Role.PATIENT.value in roles and Role.PROVIDER.value not in roles and patient.owner_subject != subject:
         approved = await session.scalar(
             select(DuplicateReview.id).where(
                 DuplicateReview.requesting_subject == subject,
