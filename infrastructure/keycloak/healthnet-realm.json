@@ -4,7 +4,7 @@
   "displayName": "HealthNet",
   "displayNameHtml": "<strong>HealthNet</strong>",
   "sslRequired": "none",
-  "registrationAllowed": false,
+  "registrationAllowed": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
@@ -135,5 +135,8 @@
         "auditor"
       ]
     }
+  ],
+  "defaultRoles": [
+    "patient"
   ]
 }
