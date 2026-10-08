@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.identity.models import (
@@ -17,6 +17,8 @@ from app.identity.models import (
     PatientLocationHistory,
 )
 from app.identity.schemas import LocationHistoryRequest, PatientRegistrationRequest
+from app.record_locator.models import RecordLocator
+from app.repository.models import EHRCustody, Repository
 
 
 @dataclass(frozen=True)
@@ -160,6 +162,51 @@ class IdentityService:
                     issuing_authority=identifier.issuing_authority,
                 )
             )
+        await self.session.flush()
+
+        # Every newly registered patient receives one authoritative repository.
+        # Prefer an online repository in the issuing jurisdiction, then use an
+        # online/degraded repository elsewhere so registration can continue during
+        # regional capacity changes.
+        repository = await self.session.scalar(
+            select(Repository)
+            .where(Repository.status.in_(["ONLINE", "DEGRADED"]))
+            .order_by(
+                case((Repository.jurisdiction == request.issuing_jurisdiction, 0), else_=1),
+                Repository.code,
+            )
+            .limit(1)
+        )
+        if repository is None:
+            raise ValueError(
+                "No available clinical repository is registered; an administrator must register one before patient onboarding"
+            )
+
+        now = datetime.now(UTC)
+        resource_types = (
+            "Patient,Encounter,Condition,Observation,DiagnosticReport,"
+            "MedicationRequest,Procedure,DocumentReference"
+        )
+        self.session.add(
+            RecordLocator(
+                health_id=patient.display_health_id,
+                repository_id=repository.id,
+                endpoint=repository.base_url,
+                resource_types=resource_types,
+                status="ACTIVE",
+                notes="Automatically assigned during patient registration",
+                last_verified_at=now,
+            )
+        )
+        self.session.add(
+            EHRCustody(
+                health_id=patient.display_health_id,
+                repository_id=repository.id,
+                resource_types=resource_types,
+                custody_start=now,
+                custody_end=None,
+            )
+        )
         await self.session.flush()
         return "REGISTERED", patient, [], None
 
