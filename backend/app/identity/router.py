@@ -58,10 +58,14 @@ async def register_patient(
 ) -> RegistrationResult:
     roles = set(user.get("roles", []))
     requesting_subject = str(user.get("sub")) if Role.PATIENT.value in roles else None
-    outcome, patient, matches, review = await IdentityService(session).register_patient(
-        request, requesting_subject=requesting_subject
-    )
-    await session.commit()
+    try:
+        outcome, patient, matches, review = await IdentityService(session).register_patient(
+            request, requesting_subject=requesting_subject
+        )
+        await session.commit()
+    except ValueError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     candidates = [
         MatchCandidate(
             patient_id=item.patient.id,
