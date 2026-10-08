@@ -116,13 +116,38 @@ async def submit_patient_record(
     resource_id = payload.get("id") or (health_id if resource_type == "Patient" else str(uuid4()))
     payload["id"] = resource_id
     client = FHIRClient(locator.endpoint or repository.base_url)
+
+    # Create a minimal canonical Patient resource on first clinical submission,
+    # so incoming resources never point at an absent Patient/{health_id}.
+    known_types = [value.strip() for value in locator.resource_types.split(",") if value.strip()]
+    if resource_type != "Patient":
+        try:
+            await client.get_resource("Patient", health_id)
+        except Exception:
+            patient_resource = {
+                "resourceType": "Patient",
+                "id": health_id,
+                "identifier": [{"system": "urn:healthnet:health-id", "value": health_id}],
+                "name": [{"family": patient.family_name, "given": [patient.given_name]}],
+                "birthDate": str(patient.date_of_birth),
+            }
+            try:
+                await client.put_resource("Patient", health_id, patient_resource)
+            except Exception as exc:
+                await session.rollback()
+                raise HTTPException(
+                    status_code=502,
+                    detail="Could not establish the patient's canonical FHIR Patient resource",
+                ) from exc
+        if "Patient" not in known_types:
+            known_types.append("Patient")
+
     try:
         saved = await client.put_resource(resource_type, resource_id, payload)
     except Exception as exc:
         await session.rollback()
         raise HTTPException(status_code=502, detail="Assigned FHIR repository rejected the record") from exc
 
-    known_types = [value.strip() for value in locator.resource_types.split(",") if value.strip()]
     if resource_type not in known_types:
         known_types.append(resource_type)
         locator.resource_types = ",".join(sorted(set(known_types)))
