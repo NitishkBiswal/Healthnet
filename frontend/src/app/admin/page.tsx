@@ -212,13 +212,20 @@ export default function AdminPortal() {
                     <button
                       onClick={async () => {
                         try {
-                          await api.issueTransferToken(transfer.id);
-                          const completed = await api.executeTransfer(transfer.id, { resource_count: 8, package_hash: "DEMO-FHIR-PACKAGE-INTEGRITY-0001" });
+                          const authorization = await api.issueTransferToken(transfer.id);
+                          const completed = await api.executeTransfer(transfer.id, {
+                            authorization_token: authorization.authorization_token,
+                            resource_count: 0,
+                          });
                           const updatedLocation = await api.currentRecordLocation(healthId.trim());
-                          setTransfer({ ...transfer, state: "COMPLETED", package_hash: "DEMO-FHIR-PACKAGE-INTEGRITY-0001" });
+                          const latestTransfer = await api.transferStatus(transfer.id);
+                          setTransfer(latestTransfer);
                           setCurrentLocation(updatedLocation);
                           setResult(completed);
-                          setMigrationMessage(`Migration completed. The patient's active repository is now ${updatedLocation.repository_name} (${updatedLocation.repository_code}).`);
+                          const validation = typeof completed === "object" && completed !== null && "validation_status" in completed
+                            ? String((completed as { validation_status: unknown }).validation_status)
+                            : "VERIFIED";
+                          setMigrationMessage(`Migration completed (${validation}). The patient's active repository is now ${updatedLocation.repository_name} (${updatedLocation.repository_code}).`);
                         } catch (e) {
                           setMigrationMessage(e instanceof Error ? e.message : "Migration execution failed");
                         }
