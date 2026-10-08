@@ -41,6 +41,26 @@ export default function AdminPortal() {
     void loadProviders();
   }, []);
 
+  useEffect(() => {
+    if (!transfer?.id || transfer.state === "COMPLETED") return;
+
+    const refresh = async () => {
+      try {
+        const latest = await api.transferStatus(transfer.id);
+        setTransfer(latest);
+      } catch {
+        // Keep the current state visible if a background refresh temporarily fails.
+      }
+    };
+
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 2000);
+
+    return () => window.clearInterval(timer);
+  }, [transfer?.id, transfer?.state]);
+
+
   async function migrate() {
     setError("");
     setMigrationMessage("");
