@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     KEYCLOAK_REALM: str = "healthnet"
     KEYCLOAK_CLIENT_ID: str = "healthnet-backend"
     KEYCLOAK_CLIENT_SECRET: str = "healthnet-backend-secret"
+    KEYCLOAK_ADMIN_USERNAME: str = "admin"
+    KEYCLOAK_ADMIN_PASSWORD: str = "admin"
     HAPI_FHIR_BASE_URL: str = "http://localhost:8090/fhir"
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
     SECRET_KEY: str = "dev_secret_key_changeme"
