@@ -17,6 +17,7 @@ export default function HospitalIntegrationDemo() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Awaited<ReturnType<typeof api.submitPatientRecord>> | null>(null);
+  const [pendingResourceId, setPendingResourceId] = useState("");
 
   async function submitRecord() {
     setError("");
@@ -71,9 +72,15 @@ export default function HospitalIntegrationDemo() {
       };
     }
 
+    // Reuse the same FHIR id when retrying a failed submission so PUT remains idempotent.
+    const resourceId = pendingResourceId || crypto.randomUUID();
+    resource.id = resourceId;
+    setPendingResourceId(resourceId);
+
     setBusy(true);
     try {
       setResult(await api.submitPatientRecord(healthId.trim(), resource));
+      setPendingResourceId("");
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "Record submission failed");
     } finally {
