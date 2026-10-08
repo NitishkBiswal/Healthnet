@@ -10,6 +10,34 @@ A doctor does not scan every jurisdictional repository. After authentication, pr
 
 The permanent Health ID does not change when the patient moves.
 
+## Hospital record ingestion
+
+A trusted provider can simulate a hospital submission from the **Hospital Integration Demo** linked in the Doctor Portal. The backend endpoint is:
+
+    POST /api/v1/fhir/patients/{health_id}/records
+
+The caller must be authenticated and linked to an active trusted HealthNet provider (or use an admin/system account for controlled demo setup). The caller cannot submit a repository URL. HealthNet resolves the patient's active Record Locator, validates the Health ID and patient reference, then writes the FHIR resource to that repository using an idempotent PUT.
+
+Example Observation payload:
+
+    {
+      "resourceType": "Observation",
+      "status": "final",
+      "code": { "text": "Blood pressure" },
+      "subject": { "reference": "Patient/INOD000100" },
+      "effectiveDateTime": "2026-10-09T10:00:00Z",
+      "valueQuantity": {
+        "value": 128,
+        "unit": "mmHg",
+        "system": "http://unitsofmeasure.org",
+        "code": "mm[Hg]"
+      }
+    }
+
+For this prototype, the FHIR Patient resource uses the Health ID as its FHIR resource ID and carries the identifier system `urn:healthnet:health-id`. Clinical resources must reference `Patient/{health_id}`. A production hospital connector would map its local patient identifiers to HealthNet's canonical Health ID and preserve signed sender identity and provenance.
+
+Patient registration now selects an online/degraded repository, preferring the issuing jurisdiction, and creates the active Record Locator and custody history in the same database transaction. Registration returns a clear service-unavailable error if no repository is available.
+
 ## Migration model
 
 A repository move is a controlled custody migration:
@@ -32,7 +60,7 @@ Run from the repository root after Docker, migrations and Keycloak are running:
 
 The seed creates Health ID INOD000100 for Aarav Sharma, Odisha as the current repository, demo Provider ID PRV-IN-000001, and Patient/Encounter/Condition/Observation/MedicationRequest FHIR data. Kolkata is also registered as a logical migration destination.
 
-The local demo intentionally uses the existing HAPI FHIR endpoint for both logical repositories so it does not require the heavy three-HAPI setup used by the abandoned federation demo. A production deployment can give each repository its own FHIR endpoint.
+The local demo intentionally uses the same HAPI FHIR endpoint for both logical repositories so it does not require multiple HAPI containers. Migration still performs export, idempotent upsert, read-back validation and hash verification, but because both logical repositories share one endpoint it is an in-place demo transfer, not physical isolation. The manifest reports `VALID_SHARED_ENDPOINT`. For a demonstration of physical copying, configure the destination repository with a separate HAPI FHIR endpoint. A production deployment must use separate repository endpoints and secure service-to-service authentication.
 
 ## Demo walkthrough
 
