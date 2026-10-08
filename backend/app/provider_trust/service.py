@@ -1,5 +1,6 @@
 from uuid import UUID
 import asyncio
+import logging
 import json
 import urllib.error
 import urllib.parse
@@ -10,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.provider_trust.models import Organization, Provider, PractitionerRole
 from app.core.config import settings
+logger = logging.getLogger(__name__)
+
 from app.provider_trust.schemas import (
     OrganizationCreate,
     ProviderCreate,
@@ -121,8 +124,10 @@ class ProviderTrustService:
         if not subject: return
         req=urllib.request.Request(f"{settings.KEYCLOAK_URL.rstrip('/')}/admin/realms/{settings.KEYCLOAK_REALM}/users/{subject}",
             headers={"Authorization":f"Bearer {token}"},method="DELETE")
-        try: urllib.request.urlopen(req,timeout=10).close()
-        except Exception: pass
+        try:
+            urllib.request.urlopen(req, timeout=10).close()
+        except Exception:
+            logger.warning("Failed to delete partially created Keycloak user %s", subject, exc_info=True)
 
     async def list_providers(self) -> list[Provider]:
         result = await self.session.execute(
