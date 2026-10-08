@@ -93,9 +93,21 @@ class MigrationService:
         item = await self.session.get(TransferRequest, transfer_id)
         if item is None:
             raise ValueError("Transfer request not found")
-        if item.state != MigrationState.PATIENT_AUTHORIZED.value:
-            raise ValueError("Patient authorization is required first")
+        if item.state not in (
+            MigrationState.PATIENT_AUTHORIZED.value,
+            MigrationState.TRANSFER_AUTH_ISSUED.value,
+        ):
+            raise ValueError("Patient authorization is required before issuing a transfer token")
 
+        # Re-issuing after a failed transfer invalidates any previous token.
+        await self.session.execute(
+            update(TransferAuthorizationToken)
+            .where(
+                TransferAuthorizationToken.transfer_request_id == item.id,
+                TransferAuthorizationToken.active.is_(True),
+            )
+            .values(active=False)
+        )
         token = secrets.token_urlsafe(32)
         record = TransferAuthorizationToken(
             transfer_request_id=item.id,
