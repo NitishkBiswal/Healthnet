@@ -172,8 +172,10 @@ class LongitudinalViewService:
                             resources.append(
                                 await client.get_resource("Patient", request.health_id)
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            errors.append(
+                                f"{repository.code}/Patient: {type(exc).__name__}"
+                            )
                 else:
                     bundle = await client.search(
                         resource_type,
