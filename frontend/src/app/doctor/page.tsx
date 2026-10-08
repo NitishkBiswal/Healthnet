@@ -62,9 +62,15 @@ export default function DoctorPortal() {
           {principal?.provider_id || "Not linked to a HealthNet provider"}
         </p>
         {!principal?.provider_id && principal?.subject && (
-          <p className="mt-2 text-xs text-slate-600">
-            Your account is authenticated, but an administrator must link this Keycloak account to a HealthNet Provider record before you can receive a Provider ID.
-          </p>
+          <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
+            <p className="font-semibold">
+              This Keycloak account is not linked to a HealthNet Provider record yet.
+            </p>
+            <p className="mt-1">
+              An administrator can use the following account subject to create the provider mapping:
+            </p>
+            <p className="mt-1 break-all font-mono">{principal.subject}</p>
+          </div>
         )}
       </Card>
 
