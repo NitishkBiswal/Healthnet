@@ -35,8 +35,11 @@ class TransferAuthorizationRequest(BaseModel):
 
 
 class TransferExecuteRequest(BaseModel):
+    authorization_token: str = Field(min_length=20, max_length=256)
+    # Zero means discover the actual count from the source FHIR repository.
     resource_count: int = Field(default=0, ge=0, le=1000000)
-    package_hash: str = Field(min_length=16, max_length=128)
+    # Accepted for older clients; the server computes the authoritative package hash.
+    package_hash: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class TransferStatus(BaseModel):
