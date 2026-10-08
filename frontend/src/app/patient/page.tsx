@@ -4,12 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { api, type DuplicateReview, type Patient } from "@/lib/api";
-import { Card, Field, PortalShell } from "@/components/portal-shell";
+import { Card, PortalShell } from "@/components/portal-shell";
 
 export default function PatientPortal() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [reviews, setReviews] = useState<DuplicateReview[]>([]);
-  const [healthId, setHealthId] = useState("");
   const [consents, setConsents] = useState<unknown>(null);
   const [emergency, setEmergency] = useState<unknown>(null);
   const [error, setError] = useState("");
@@ -77,20 +76,15 @@ export default function PatientPortal() {
               You have not registered a Health ID yet. Use <strong>Get my Health ID</strong> above.
             </p>
           )}
-          <div className="mt-5 flex gap-2">
-            <Field value={healthId} onChange={(event) => setHealthId(event.target.value)} placeholder="Health ID"/>
-            <button onClick={() => run(() => api.patient(healthId), setPatient)} className="rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white">
-              Lookup
-            </button>
-          </div>
+>
         </Card>
 
         <Card title="Consent & emergency profile">
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => run(() => api.consents(healthId || patient?.display_health_id || ""), setConsents)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50">
+            <button onClick={() => run(() => api.consents(patient?.display_health_id || ""), setConsents)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50">
               View consent
             </button>
-            <button onClick={() => run(() => api.emergency(healthId || patient?.display_health_id || ""), setEmergency)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50">
+            <button onClick={() => run(() => api.emergency(patient?.display_health_id || ""), setEmergency)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50">
               Emergency profile
             </button>
           </div>
