@@ -155,33 +155,36 @@ class LongitudinalViewService:
         client = FHIRClient(locator.endpoint or repository.base_url)
         for resource_type in resource_types:
             try:
+                resources: list[dict] = []
                 if resource_type == "Patient":
                     bundle = await client.search(
                         "Patient",
                         {"identifier": f"urn:healthnet:health-id|{request.health_id}"},
                     )
-                    entries = bundle.get("entry", [])
-                    patient_resources = [
-                        entry.get("resource")
-                        for entry in entries
-                        if isinstance(entry, dict) and isinstance(entry.get("resource"), dict)
-                    ]
-                    if not patient_resources:
+                    for entry in bundle.get("entry", []):
+                        if not isinstance(entry, dict):
+                            continue
+                        patient_resource = entry.get("resource")
+                        if isinstance(patient_resource, dict):
+                            resources.append(patient_resource)
+                    if not resources:
                         try:
-                            patient_resources = [await client.get_resource("Patient", request.health_id)]
+                            resources.append(
+                                await client.get_resource("Patient", request.health_id)
+                            )
                         except Exception:
-                            patient_resources = []
-                    resources = patient_resources
+                            pass
                 else:
                     bundle = await client.search(
                         resource_type,
                         {"patient": request.health_id},
                     )
-                    resources = [
-                        entry.get("resource")
-                        for entry in bundle.get("entry", [])
-                        if isinstance(entry, dict) and isinstance(entry.get("resource"), dict)
-                    ]
+                    for entry in bundle.get("entry", []):
+                        if not isinstance(entry, dict):
+                            continue
+                        clinical_resource = entry.get("resource")
+                        if isinstance(clinical_resource, dict):
+                            resources.append(clinical_resource)
 
                 for resource in resources:
                     if isinstance(resource, dict):
