@@ -11,8 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.provider_trust.models import Organization, Provider, PractitionerRole
 from app.core.config import settings
-logger = logging.getLogger(__name__)
-
 from app.provider_trust.schemas import (
     OrganizationCreate,
     ProviderCreate,
@@ -20,6 +18,8 @@ from app.provider_trust.schemas import (
     TrustStatus,
     ProviderOnboardRequest,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderTrustService:
