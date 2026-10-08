@@ -1,0 +1,2 @@
+# Keep shell scripts LF-only so Docker/Linux can execute them reliably.
+*.sh text eol=lf
