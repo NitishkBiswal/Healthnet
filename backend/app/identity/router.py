@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,6 +18,8 @@ from app.identity.schemas import (
     RegistrationResult,
 )
 from app.identity.service import IdentityService
+from app.consent.models import Consent
+from app.provider_trust.models import Provider
 from app.security.dependencies import get_current_user
 from app.security.rbac import Role
 
@@ -161,16 +164,50 @@ async def get_patient(
     patient = await IdentityService(session).get_patient_by_health_id(health_id)
     if patient is None:
         raise HTTPException(status_code=404, detail="Health ID not found")
-    if Role.PATIENT.value in user.get("roles", []) and patient.owner_subject != str(user.get("sub")):
+    roles = set(user.get("roles", []))
+    subject = str(user.get("sub", ""))
+
+    if Role.PATIENT.value in roles and patient.owner_subject != subject:
         approved = await session.scalar(
             select(DuplicateReview.id).where(
-                DuplicateReview.requesting_subject == str(user.get("sub")),
+                DuplicateReview.requesting_subject == subject,
                 DuplicateReview.candidate_patient_id == patient.id,
                 DuplicateReview.status == "APPROVED_DUPLICATE",
             )
         )
         if approved is None:
             raise HTTPException(status_code=403, detail="Patients can only access their own Health ID")
+
+    # Provider accounts may load demographics only when an active trusted
+    # provider record is linked to their login and the patient has granted
+    # that provider active consent. Longitudinal clinical data still passes
+    # through its stricter purpose-and-scope authorization check.
+    if Role.PROVIDER.value in roles:
+        provider = await session.scalar(
+            select(Provider).where(
+                Provider.keycloak_subject == subject,
+                Provider.trust_status == "ACTIVE",
+            )
+        )
+        now = datetime.now(UTC)
+        consent = None
+        if provider is not None:
+            consent = await session.scalar(
+                select(Consent.id).where(
+                    Consent.health_id == health_id,
+                    Consent.grantee_type == "PROVIDER",
+                    Consent.grantee_id == provider.external_id,
+                    Consent.status == "ACTIVE",
+                    Consent.valid_from <= now,
+                    (Consent.valid_until.is_(None) | (Consent.valid_until >= now)),
+                ).limit(1)
+            )
+        if consent is None:
+            raise HTTPException(
+                status_code=403,
+                detail="No active patient consent is linked to this provider account",
+            )
+
     return PatientResponse.model_validate(patient)
 
 
