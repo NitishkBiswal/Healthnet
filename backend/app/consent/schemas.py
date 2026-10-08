@@ -23,3 +23,14 @@ class ConsentResponse(BaseModel):
 
 class ConsentCheckRequest(BaseModel):
     health_id:str; grantee_id:str; purpose:str; scope:str; at:datetime|None=None
+
+
+class AuthorizedPatientResponse(BaseModel):
+    health_id: str
+    given_name: str
+    family_name: str
+    consent_id: UUID
+    purpose: str
+    scopes: list[str]
+    valid_from: datetime
+    valid_until: datetime | None = None
