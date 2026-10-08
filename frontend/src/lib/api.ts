@@ -95,9 +95,16 @@ export const api = {
   longitudinal: (healthId: string, purpose = "TREATMENT", scope = "clinical") =>
     request<Record<string, unknown>>("/longitudinal/patients/longitudinal-view", { method: "POST", body: JSON.stringify({ health_id: healthId, purpose, scope }) }),
   repositories: () => request<Repository[]>("/repository/repositories"),
+  currentRecordLocation: (healthId: string) => request<CurrentRecordLocation>("/record-locator/patients/" + encodeURIComponent(healthId) + "/current"),
   audits: (healthId: string) => request<AuditEvent[]>("/audit/patient/" + encodeURIComponent(healthId)),
   verifyLedger: () => request<{ valid: boolean; entries_checked: number }>("/trust-ledger/ledger/verify"),
   createTransfer: (body: { health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string }) =>
     request<Transfer>("/migration/transfer-requests", { method: "POST", body: JSON.stringify(body) }),
+  myTransfers: () => request<Transfer[]>("/migration/my-transfers"),
+  authorizeTransfer: (id: string, authorization_reference: string) =>
+    request<Transfer>("/migration/transfer-authorizations/" + encodeURIComponent(id), { method: "POST", body: JSON.stringify({ authorization_reference }) }),
   transferStatus: (id: string) => request<Transfer>("/migration/transfers/" + id + "/status"),
+  issueTransferToken: (id: string) => request<{ transfer_id: string; authorization_token: string; expires_at: string }>("/migration/transfers/" + id + "/issue-token", { method: "POST" }),
+  executeTransfer: (id: string, body: { resource_count: number; package_hash: string }) =>
+    request<Record<string, unknown>>("/migration/transfers/" + id + "/execute", { method: "POST", body: JSON.stringify(body) }),
 };
