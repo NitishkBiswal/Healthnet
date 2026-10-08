@@ -42,11 +42,23 @@ async def get_consent(consent_id:UUID,_:dict=Depends(get_current_user),session:A
     x=await ConsentService(session).get_consent(consent_id)
     if x is None:raise HTTPException(404,"Consent not found")
     return response(x)
-@router.delete("/consents/{consent_id}",response_model=ConsentResponse)
-async def revoke_consent(consent_id:UUID,_:dict=Depends(require_patient),session:AsyncSession=Depends(get_db)):
-    x=await ConsentService(session).revoke_consent(consent_id)
-    if x is None:raise HTTPException(404,"Consent not found")
-    await session.commit();return response(x)
+@router.delete("/consents/{consent_id}", response_model=ConsentResponse)
+async def revoke_consent(
+    consent_id: UUID,
+    user: dict = Depends(require_patient),
+    session: AsyncSession = Depends(get_db),
+):
+    x = await ConsentService(session).get_consent(consent_id)
+    if x is None:
+        raise HTTPException(404, "Consent not found")
+    owner = await session.scalar(
+        select(PatientIdentity).where(PatientIdentity.owner_subject == user.get("sub"))
+    )
+    if owner is None or owner.display_health_id != x.health_id:
+        raise HTTPException(403, "Patients may only revoke their own consent")
+    x = await ConsentService(session).revoke_consent(consent_id)
+    await session.commit()
+    return response(x)
 @router.get("/patients/{health_id}/consents", response_model=list[ConsentResponse])
 async def get_patient_consents(
     health_id: str,
