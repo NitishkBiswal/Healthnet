@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 from sqlalchemy import select
+from app.identity.models import PatientIdentity
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.consent.models import Consent
 from app.consent.schemas import ConsentCreateRequest, ConsentStatus
@@ -25,6 +26,24 @@ class ConsentService:
             (Consent.valid_until.is_(None)| (Consent.valid_until>=moment))
         ))
         return any(scope in (x.scopes.split(",") if x.scopes else []) for x in result.scalars())
-    async def get_patient_consents(self,health_id:str)->list[Consent]:
-        result=await self.session.execute(select(Consent).where(Consent.health_id==health_id).order_by(Consent.created_at.desc()))
+    async def get_patient_consents(self, health_id: str) -> list[Consent]:
+        result = await self.session.execute(
+            select(Consent).where(Consent.health_id == health_id).order_by(Consent.created_at.desc())
+        )
         return list(result.scalars())
+
+    async def get_authorized_patients(self, grantee_id: str) -> list[tuple[Consent, PatientIdentity]]:
+        moment = datetime.now(UTC)
+        result = await self.session.execute(
+            select(Consent, PatientIdentity)
+            .join(PatientIdentity, PatientIdentity.display_health_id == Consent.health_id)
+            .where(
+                Consent.grantee_id == grantee_id,
+                Consent.status == ConsentStatus.ACTIVE.value,
+                Consent.valid_from <= moment,
+                (Consent.valid_until.is_(None) | (Consent.valid_until >= moment)),
+                PatientIdentity.status == "ACTIVE",
+            )
+            .order_by(PatientIdentity.family_name, PatientIdentity.given_name)
+        )
+        return list(result.all())
