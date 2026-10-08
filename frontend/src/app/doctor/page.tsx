@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { api, type AuthorizedPatient, type Principal } from "@/lib/api";
@@ -53,6 +54,12 @@ export default function DoctorPortal() {
       title="Doctor Portal"
       description="Review patients who have granted you access and open their clinical history when needed."
     >
+      <div className="mb-5">
+        <Card title="Hospital integration demo">
+          <p className="text-sm text-slate-700">Simulate a trusted hospital submitting an Observation, Encounter, or Condition. HealthNet will route it to the patient's currently assigned repository.</p>
+          <Link href="/hospital" className="mt-3 inline-block rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">Open record submission workspace</Link>
+        </Card>
+      </div>
       <div className="space-y-5">
         <Card title="Your HealthNet Provider ID">
           <p className="text-sm text-slate-700">
