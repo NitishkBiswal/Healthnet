@@ -33,14 +33,16 @@ export default function PatientPortal() {
       title="Patient Portal"
       description="Your Health ID, permissions and emergency profile."
     >
-      <div className="mb-5 flex flex-wrap gap-3">
-        <Link
-          href="/patient/onboarding"
-          className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400"
-        >
-          {patient ? "Update registration status" : "Get my Health ID"}
-        </Link>
-      </div>
+      {!patient && (
+        <div className="mb-5 flex flex-wrap gap-3">
+          <Link
+            href="/patient/onboarding"
+            className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400"
+          >
+            Get my Health ID
+          </Link>
+        </div>
+      )}
 
       {reviews.length > 0 && (
         <Card title="Identity review status">
