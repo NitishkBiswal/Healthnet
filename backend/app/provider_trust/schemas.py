@@ -23,6 +23,20 @@ class ProviderCreate(BaseModel):
     jurisdiction:str=Field(min_length=2,max_length=32)
     keycloak_subject:str|None=None
 
+class ProviderOnboardRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=100)
+    email: str = Field(min_length=5, max_length=320)
+    initial_password: str = Field(min_length=8, max_length=128)
+    given_name: str = Field(min_length=1, max_length=100)
+    family_name: str = Field(min_length=1, max_length=100)
+    license_number: str = Field(min_length=2, max_length=128)
+    jurisdiction: str = Field(min_length=2, max_length=32)
+
+class ProviderOnboardResponse(BaseModel):
+    provider: "ProviderResponse"
+    username: str
+    message: str
+
 class ProviderResponse(ProviderCreate):
     model_config=ConfigDict(from_attributes=True)
     id:UUID; trust_status:TrustStatus
