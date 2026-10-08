@@ -109,7 +109,7 @@ class ProviderTrustService:
             raise ValueError(f"Keycloak user creation failed ({exc.code})") from exc
         subject=location.rstrip("/").split("/")[-1]
         if not subject: raise ValueError("Keycloak did not return the new doctor user ID")
-        role_req=urllib.request.Request(f"{settings.KEYCLOAK_URL.rstrip('/')}/admin/realms/{settings.KEYCLOAK_REALM}/roles/doctor",
+        role_req=urllib.request.Request(f"{settings.KEYCLOAK_URL.rstrip('/')}/admin/realms/{settings.KEYCLOAK_REALM}/roles/provider",
             headers={"Authorization":f"Bearer {token}"},method="GET")
         with urllib.request.urlopen(role_req,timeout=10) as response: role=json.loads(response.read())
         mapping=urllib.request.Request(f"{settings.KEYCLOAK_URL.rstrip('/')}/admin/realms/{settings.KEYCLOAK_REALM}/users/{subject}/role-mappings/realm",
