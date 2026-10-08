@@ -235,7 +235,7 @@ class MigrationService:
             )
 
         item.state = MigrationState.VALIDATION.value
-        package_hash = hashlib.sha256(canonical(exported).encode()).hexdigest()
+        package_hash = hashlib.sha256(canonical([without_server_metadata(resource) for resource in exported]).encode()).hexdigest()
         item.package_hash = package_hash
         item.state = MigrationState.HASH_GENERATION.value
         await self.session.flush()
