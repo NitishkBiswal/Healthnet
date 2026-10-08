@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type AuthorizedPatient, type Principal } from "@/lib/api";
+import { api, type AuthorizedPatient, type CurrentRecordLocation, type Principal } from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
 export default function DoctorPortal() {
@@ -13,6 +13,7 @@ export default function DoctorPortal() {
   const [error, setError] = useState("");
   const [authorized, setAuthorized] = useState<AuthorizedPatient[]>([]);
   const [principal, setPrincipal] = useState<Principal | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<CurrentRecordLocation | null>(null);
 
   async function loadPrincipal() {
     try {
@@ -114,6 +115,13 @@ export default function DoctorPortal() {
       </Card>
 
       <Card title="Authorized patient record view">
+        {currentLocation && (
+          <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm">
+            <p className="font-bold text-slate-950">Current repository: {currentLocation.repository_name}</p>
+            <p className="text-slate-700">{currentLocation.repository_code} · {currentLocation.jurisdiction}</p>
+            <p className="mt-1 text-slate-700">Only this repository is queried for the patient's longitudinal record.</p>
+          </div>
+        )}
         <div className="grid gap-3 md:grid-cols-3">
           <Field value={healthId} onChange={(e) => setHealthId(e.target.value)} placeholder="Health ID" />
           <Field value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Purpose" />
