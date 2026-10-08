@@ -263,10 +263,10 @@ async def main() -> None:
     patient_subject = await keycloak_subject("testpatient")
     provider_subject = await keycloak_subject("testdoctor")
 
-    for resource in FHIR_RESOURCES:
-        await put_fhir(resource)
+    health_id = await seed_database(patient_subject, provider_subject)
 
-    await seed_database(patient_subject, provider_subject)
+    for resource in fhir_resources(health_id):
+        await put_fhir(resource)
 
     print()
     print("HealthNet single-repository demo is ready.")
