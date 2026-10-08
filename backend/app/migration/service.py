@@ -195,6 +195,7 @@ class MigrationService:
         item.state = MigrationState.SOURCE_ARCHIVED_READONLY.value
         item.state = MigrationState.COMPLETED.value
         await self.session.flush()
+        await self.session.refresh(manifest)
         return manifest
 
     async def get_patient_transfers(self, actor_id: str) -> list[TransferRequest]:
