@@ -10,6 +10,15 @@ until /opt/keycloak/bin/kcadm.sh get realm/healthnet >/dev/null 2>&1; do
   sleep 3
 done
 
+/opt/keycloak/bin/kcadm.sh update realms/healthnet -s registrationAllowed=true
+
+# Make every self-registered account a patient by default.
+if /opt/keycloak/bin/kcadm.sh get roles/default-roles-healthnet -r healthnet >/dev/null 2>&1; then
+  /opt/keycloak/bin/kcadm.sh add-roles -r healthnet \
+    --rname default-roles-healthnet \
+    --rolename patient >/dev/null 2>&1 || true
+fi
+
 if ! /opt/keycloak/bin/kcadm.sh get users -r healthnet -q username=testauditor | grep -q '"username" : "testauditor"'; then
   /opt/keycloak/bin/kcadm.sh create users -r healthnet     -s username=testauditor     -s enabled=true     -s email=auditor@healthnet.dev     -s firstName=Test     -s lastName=Auditor
 fi
