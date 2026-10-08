@@ -56,6 +56,20 @@ export default function AdminPortal() {
     }
   }
 
+  async function loadCurrentLocation() {
+    setError("");
+    setCurrentLocation(null);
+    if (!healthId.trim()) {
+      setError("Enter a Patient Health ID first");
+      return;
+    }
+    try {
+      setCurrentLocation(await api.currentRecordLocation(healthId.trim()));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not find the patient's current repository");
+    }
+  }
+
   async function registerProvider() {
     setProviderMessage("");
     try {
