@@ -46,10 +46,12 @@ class ConsentService:
     async def get_consent(self, consent_id: UUID):
         return await self.session.get(Consent, consent_id)
 
-    async def revoke_consent(self, consent_id: UUID) -> Consent | None:
+    async def revoke_consent(self, consent_id: UUID) -> Consent:
         x = await self.get_consent(consent_id)
         if x is None:
-            return None
+            raise ValueError("Consent not found")
+        if x.status == ConsentStatus.REVOKED.value:
+            raise ValueError("Consent has already been revoked")
         x.status = ConsentStatus.REVOKED.value
         x.revoked_at = datetime.now(UTC)
         await self.session.flush()

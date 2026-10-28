@@ -13,27 +13,59 @@ export default function DoctorPortal() {
   const [error, setError] = useState("");
   const [authorized, setAuthorized] = useState<AuthorizedPatient[]>([]);
   const [principal, setPrincipal] = useState<Principal | null>(null);
-
-  async function loadPrincipal() {
-    try {
-      setPrincipal(await api.currentPrincipal());
-    } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Unable to load doctor identity");
-    }
-  }
-
-  async function loadAuthorized() {
-    try {
-      setAuthorized(await api.authorizedPatients());
-    } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Unable to load authorized patients");
-    }
-  }
+  const [resourceType, setResourceType] = useState("Observation");
+  const [resourceJson, setResourceJson] = useState("");
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
 
   useEffect(() => {
-    void loadPrincipal();
-    void loadAuthorized();
+    let active = true;
+    async function loadInitialData() {
+      try {
+        const [initialPrincipal, initialPatients] = await Promise.all([
+          api.currentPrincipal(),
+          api.authorizedPatients(),
+        ]);
+        if (active) {
+          setPrincipal(initialPrincipal);
+          setAuthorized(initialPatients);
+        }
+      } catch (reason: unknown) {
+        if (active) setError(reason instanceof Error ? reason.message : "Unable to load doctor workspace");
+      }
+    }
+    void loadInitialData();
+    return () => { active = false; };
   }, []);
+
+  async function saveFHIRResource() {
+    setSaveMessage("");
+    if (!healthId.trim()) {
+      setSaveMessage("Select an authorized patient first.");
+      return;
+    }
+    let resource: Record<string, unknown>;
+    try {
+      resource = JSON.parse(resourceJson) as Record<string, unknown>;
+    } catch {
+      setSaveMessage("Record JSON is invalid.");
+      return;
+    }
+    setSaveBusy(true);
+    try {
+      const saved = await api.createFHIRResource(resourceType, {
+        ...resource,
+        resourceType,
+        subject: { reference: `Patient/${healthId}` },
+      });
+      setSaveMessage(`Record saved successfully${saved.id ? ` (${String(saved.id)})` : ""}.`);
+      setResourceJson("");
+    } catch (reason: unknown) {
+      setSaveMessage(reason instanceof Error ? reason.message : "Unable to save record");
+    } finally {
+      setSaveBusy(false);
+    }
+  }
 
   async function load() {
     setError("");
@@ -111,6 +143,29 @@ export default function DoctorPortal() {
             ))}
           </div>
         )}
+      </Card>
+
+      <Card title="Save an authorized FHIR record">
+        <div className="grid gap-3 md:grid-cols-3">
+          <select value={resourceType} onChange={(e) => setResourceType(e.target.value)} className="rounded-lg border-2 border-slate-400 px-3 py-2 text-sm">
+            <option>Observation</option>
+            <option>Condition</option>
+            <option>MedicationRequest</option>
+            <option>Encounter</option>
+          </select>
+          <p className="md:col-span-2 text-xs text-slate-600">Only consented patients and active repositories are allowed. Patient identity is derived from the selected Health ID.</p>
+        </div>
+        <textarea
+          value={resourceJson}
+          onChange={(e) => setResourceJson(e.target.value)}
+          placeholder='FHIR fields, for example {"status":"final","code":{"text":"Blood pressure"}}'
+          rows={7}
+          className="mt-3 w-full rounded-lg border-2 border-slate-400 p-3 font-mono text-xs"
+        />
+        <button onClick={() => void saveFHIRResource()} disabled={saveBusy || !resourceJson.trim()} className="mt-3 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+          {saveBusy ? "Validating and saving…" : "Save record"}
+        </button>
+        {saveMessage && <p className="mt-3 text-sm text-slate-700">{saveMessage}</p>}
       </Card>
 
       <Card title="Authorized patient record view">

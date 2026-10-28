@@ -66,6 +66,7 @@ export interface Principal {
   provider_name?: string | null; provider_status?: string | null;
 }
 export interface AuditEvent { id: string; event_type: string; health_id?: string; actor_id: string; action: string; payload: string; event_hash: string; created_at: string; }
+export interface Custody { id: string; health_id: string; repository_id: string; resource_types: string[]; custody_start: string; custody_end?: string; }
 export interface Transfer { id: string; health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; state: string; authorization_reference?: string; package_hash?: string; error_message?: string; created_at: string; updated_at: string; }
 
 export const api = {
@@ -93,6 +94,10 @@ export const api = {
   repositories: () => request<Repository[]>("/repository/repositories"),
   audits: (healthId: string) => request<AuditEvent[]>("/audit/patient/" + encodeURIComponent(healthId)),
   verifyLedger: () => request<{ valid: boolean; entries_checked: number }>("/trust-ledger/ledger/verify"),
+  createFHIRResource: (resourceType: string, resource: Record<string, unknown>) =>
+    request<Record<string, unknown>>("/fhir/" + encodeURIComponent(resourceType), { method: "POST", body: JSON.stringify(resource) }),
+  changeRepository: (healthId: string, repositoryId: string) =>
+    request<Custody>("/repository/patients/" + encodeURIComponent(healthId) + "/ehr-custody", { method: "PUT", body: JSON.stringify({ repository_id: repositoryId, resource_types: ["FHIR"] }) }),
   createTransfer: (body: { health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string }) =>
     request<Transfer>("/migration/transfer-requests", { method: "POST", body: JSON.stringify(body) }),
   transferStatus: (id: string) => request<Transfer>("/migration/transfers/" + id + "/status"),

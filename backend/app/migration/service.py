@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.identity.models import PatientIdentity
 from app.migration.models import TransferAuthorizationToken, TransferManifest, TransferRequest
 from app.migration.schemas import MigrationState, TransferExecuteRequest, TransferRequestCreate
 from app.repository.models import Repository, RepositoryStatus
@@ -17,11 +18,30 @@ class MigrationService:
         if source is None or destination is None: raise ValueError("Source or destination repository not found")
         if source.status == RepositoryStatus.OFFLINE or destination.status == RepositoryStatus.OFFLINE: raise ValueError("Source and destination repositories must be available")
         item = TransferRequest(**request.model_dump(), requested_by=actor_id, state=MigrationState.REQUESTED.value); self.session.add(item); await self.session.flush(); return item
-    async def authorize_transfer(self, transfer_id: UUID, actor_id: str, authorization_reference: str) -> TransferRequest:
-        item=await self.session.get(TransferRequest,transfer_id)
-        if item is None: raise ValueError("Transfer request not found")
-        if item.state != MigrationState.REQUESTED.value: raise ValueError("Transfer is not awaiting authorization")
-        item.state=MigrationState.PATIENT_AUTHORIZED.value; item.authorization_reference=authorization_reference; await self.session.flush(); return item
+    async def authorize_transfer(
+        self,
+        transfer_id: UUID,
+        actor_id: str,
+        authorization_reference: str,
+    ) -> TransferRequest:
+        item = await self.session.get(TransferRequest, transfer_id)
+        if item is None:
+            raise ValueError("Transfer request not found")
+
+        patient = await self.session.scalar(
+            select(PatientIdentity).where(
+                PatientIdentity.display_health_id == item.health_id
+            )
+        )
+        if patient is None or patient.owner_subject != actor_id:
+            raise ValueError("Transfer does not belong to this patient")
+        if item.state != MigrationState.REQUESTED.value:
+            raise ValueError("Transfer is not awaiting authorization")
+
+        item.state = MigrationState.PATIENT_AUTHORIZED.value
+        item.authorization_reference = authorization_reference
+        await self.session.flush()
+        return item
     async def issue_transfer_token(self, transfer_id: UUID, actor_id: str) -> tuple[TransferAuthorizationToken,str]:
         item=await self.session.get(TransferRequest,transfer_id)
         if item is None: raise ValueError("Transfer request not found")

@@ -13,6 +13,10 @@ export default function AdminPortal() {
   const [destination, setDestination] = useState("");
   const [result, setResult] = useState<unknown>(null);
   const [error, setError] = useState("");
+  const [changeHealthId, setChangeHealthId] = useState("");
+  const [changeRepositoryId, setChangeRepositoryId] = useState("");
+  const [changeBusy, setChangeBusy] = useState(false);
+  const [repositoryMessage, setRepositoryMessage] = useState("");
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -32,11 +36,48 @@ export default function AdminPortal() {
   }
 
   useEffect(() => {
-    api.repositories()
-      .then(setRepos)
-      .catch((e) => setError(e instanceof Error ? e.message : "Could not load repositories"));
-    void loadProviders();
+    let active = true;
+    async function loadRepositories() {
+      try {
+        const repositories = await api.repositories();
+        if (active) setRepos(repositories);
+      } catch (reason: unknown) {
+        if (active) setError(reason instanceof Error ? reason.message : "Could not load repositories");
+      }
+    }
+    async function loadInitialProviders() {
+      try {
+        const initialProviders = await api.providers();
+        if (active) setProviders(initialProviders);
+      } catch (reason: unknown) {
+        if (active) setError(reason instanceof Error ? reason.message : "Could not load providers");
+      }
+    }
+    void loadRepositories();
+    void loadInitialProviders();
+    return () => { active = false; };
   }, []);
+
+  async function changeRepository() {
+    setRepositoryMessage("");
+    if (!changeHealthId.trim() || !changeRepositoryId) {
+      setRepositoryMessage("Enter a Health ID and select a target repository.");
+      return;
+    }
+    const target = repos.find((repository) => repository.id === changeRepositoryId);
+    if (!target || !window.confirm(`Validate and switch ${changeHealthId.trim()} to ${target.name}? Existing records will remain in place.`)) return;
+    setChangeBusy(true);
+    try {
+      await api.changeRepository(changeHealthId.trim(), changeRepositoryId);
+      setRepositoryMessage(`Repository changed successfully to ${target.name}.`);
+      setChangeHealthId("");
+      setChangeRepositoryId("");
+    } catch (reason: unknown) {
+      setRepositoryMessage(reason instanceof Error ? reason.message : "Repository change failed");
+    } finally {
+      setChangeBusy(false);
+    }
+  }
 
   async function migrate() {
     setError("");
@@ -137,6 +178,22 @@ export default function AdminPortal() {
                   </p>
                 </div>
               ))}
+            </div>
+          </Card>
+
+          <Card title="Change patient repository">
+            <div className="space-y-3">
+              <Field value={changeHealthId} onChange={(e) => setChangeHealthId(e.target.value)} placeholder="Patient Health ID" />
+              <select value={changeRepositoryId} onChange={(e) => setChangeRepositoryId(e.target.value)} className="w-full rounded-lg border-2 border-slate-400 bg-white px-3 py-2 text-sm">
+                <option value="">Target repository</option>
+                {repos.filter((repository) => repository.status !== "OFFLINE").map((repository) => (
+                  <option key={repository.id} value={repository.id}>{repository.code} — {repository.name}</option>
+                ))}
+              </select>
+              <button onClick={() => void changeRepository()} disabled={changeBusy} className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+                {changeBusy ? "Validating repository…" : "Change repository"}
+              </button>
+              {repositoryMessage && <p className="text-sm text-slate-700">{repositoryMessage}</p>}
             </div>
           </Card>
 

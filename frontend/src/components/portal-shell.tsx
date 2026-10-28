@@ -1,12 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AuthGuard } from "@/components/auth-guard";
 import { getUserClaims, logout, type UserRole } from "@/lib/auth";
 
 export function PortalShell({ title, description, requiredRole, children }: { title: string; description: string; requiredRole: UserRole; children: React.ReactNode }) {
-  const [claims, setClaims] = useState<{ name?: string; email?: string }>({});
-  useEffect(() => setClaims(getUserClaims()), []);
+  const [claims] = useState<{ name?: string; email?: string }>(() => getUserClaims());
 
   return (
     <AuthGuard requiredRole={requiredRole}>

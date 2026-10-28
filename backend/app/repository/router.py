@@ -1,13 +1,17 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.repository.schemas import CustodyCreate, CustodyResponse, RepositoryCreate, RepositoryInfo, RepositoryStatus
+from app.audit.schemas import AuditEventCreate, AuditEventType
+from app.audit.service import AuditService
+from app.identity.models import PatientIdentity
+from app.repository.schemas import CustodyChangeRequest, CustodyCreate, CustodyResponse, RepositoryCreate, RepositoryInfo, RepositoryStatus
 from app.repository.service import RepositoryService
 from app.security.dependencies import require_role
 from app.security.rbac import Role
 router = APIRouter(tags=["Repositories"])
-def require_admin(): return require_role(Role.ADMIN)
+require_admin = require_role(Role.ADMIN)
 @router.post("/repositories", response_model=RepositoryInfo, status_code=status.HTTP_201_CREATED)
 async def create_repository(request: RepositoryCreate, _: dict = Depends(require_admin), session: AsyncSession = Depends(get_db)):
     try:
@@ -34,6 +38,38 @@ async def create_custody(request: CustodyCreate, _: dict = Depends(require_admin
         return CustodyResponse(id=item.id, health_id=item.health_id, repository_id=item.repository_id, resource_types=item.resource_types.split(","), custody_start=item.custody_start, custody_end=item.custody_end)
     except ValueError as exc:
         await session.rollback(); raise HTTPException(400, str(exc)) from exc
+@router.put("/patients/{health_id}/ehr-custody", response_model=CustodyResponse)
+async def change_custody_repository(
+    health_id: str,
+    request: CustodyChangeRequest,
+    user: dict = Depends(require_admin),
+    session: AsyncSession = Depends(get_db),
+):
+    patient = await session.scalar(
+        select(PatientIdentity).where(PatientIdentity.display_health_id == health_id)
+    )
+    if patient is None:
+        raise HTTPException(404, "Patient not found")
+    try:
+        item = await RepositoryService(session).change_custody_repository(health_id, request)
+        await AuditService(session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.REPOSITORY_CHANGE,
+                health_id=health_id,
+                actor_id=user.get("sub", "unknown"),
+                action="active repository changed",
+                payload={"repository_id": str(request.repository_id)},
+            )
+        )
+        await session.commit()
+        return CustodyResponse(id=item.id, health_id=item.health_id, repository_id=item.repository_id, resource_types=item.resource_types.split(","), custody_start=item.custody_start, custody_end=item.custody_end)
+    except ValueError as exc:
+        await session.rollback()
+        raise HTTPException(400, str(exc)) from exc
+    except ConnectionError as exc:
+        await session.rollback()
+        raise HTTPException(502, str(exc)) from exc
+
 @router.get("/patients/{health_id}/ehr-custody", response_model=list[CustodyResponse])
 async def get_custody(health_id: str, _: dict = Depends(require_admin), session: AsyncSession = Depends(get_db)):
     items = await RepositoryService(session).get_custody(health_id)

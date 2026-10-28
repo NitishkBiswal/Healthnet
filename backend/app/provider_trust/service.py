@@ -122,7 +122,9 @@ class ProviderTrustService:
         req=urllib.request.Request(f"{settings.KEYCLOAK_URL.rstrip('/')}/admin/realms/{settings.KEYCLOAK_REALM}/users/{subject}",
             headers={"Authorization":f"Bearer {token}"},method="DELETE")
         try: urllib.request.urlopen(req,timeout=10).close()
-        except Exception: pass
+        except Exception:
+            # A provider can be created successfully before cleanup; do not hide the create result.
+            return
 
     async def list_providers(self) -> list[Provider]:
         result = await self.session.execute(

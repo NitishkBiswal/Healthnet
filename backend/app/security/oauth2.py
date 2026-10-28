@@ -16,7 +16,14 @@ async def verify_token(token: str) -> dict[str, Any]:
         header = jwt.get_unverified_header(token)
         key = next((k for k in jwks["keys"] if k.get("kid") == header.get("kid")), None)
         if key is None: raise ValueError("Signing key not found")
-        claims = jwt.decode(token, key, algorithms=["RS256"], issuer=metadata["issuer"], options={"verify_aud": False})
+        claims = jwt.decode(
+            token,
+            key,
+            algorithms=["RS256"],
+            issuer=metadata["issuer"],
+            audience=settings.KEYCLOAK_AUDIENCE,
+            options={"verify_aud": True},
+        )
         raw_roles = claims.get("realm_access", {}).get("roles", [])
         roles = {str(role).upper() for role in raw_roles}
         allowed_roles = {"PATIENT", "PROVIDER", "ADMIN", "AUDITOR", "SYSTEM"}

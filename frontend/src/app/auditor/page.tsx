@@ -21,7 +21,13 @@ export default function AuditorPortal() {
   }
 
   useEffect(() => {
-    void loadReviews();
+    let active = true;
+    api.duplicateReviews()
+      .then((items) => { if (active) setReviews(items); })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Could not load duplicate reviews");
+      });
+    return () => { active = false; };
   }, []);
 
   async function audit() {

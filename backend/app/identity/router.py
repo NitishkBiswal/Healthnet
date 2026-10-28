@@ -92,7 +92,8 @@ async def list_my_duplicate_reviews(
     user: dict = Depends(require_patient),
     session: AsyncSession = Depends(get_db),
 ) -> list[DuplicateReviewResponse]:
-    return await IdentityService(session).list_duplicate_reviews(str(user.get("sub")))
+    reviews = await IdentityService(session).list_duplicate_reviews(str(user.get("sub")))
+    return [DuplicateReviewResponse.model_validate(review) for review in reviews]
 
 
 @router.post("/duplicate-reviews/{review_id}/decision", response_model=DuplicateReviewResponse)

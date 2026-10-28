@@ -84,7 +84,7 @@ services:
     restart: "no"
 
   hapi-fhir:
-    image: hapiproject/hapi:latest
+    image: hapiproject/hapi:v8.12.0-2
     container_name: healthnet-hapi-fhir
     ports:
       - "8090:8080"

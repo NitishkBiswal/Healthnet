@@ -19,7 +19,7 @@ class AuthorizationService:
             return False, "Authenticated principal has no HealthNet role"
         if "ADMIN" in roles or "SYSTEM" in roles:
             return True, "Privileged system role"
-        if "PROVIDER" not in roles and "PATIENT" not in roles and "AUDITOR" not in roles:
+        if "PROVIDER" not in roles and "PATIENT" not in roles:
             return False, "Role is not authorized for HealthNet access"
 
         grantee_id = request.grantee_id

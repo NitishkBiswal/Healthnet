@@ -40,6 +40,11 @@ class CustodyCreate(BaseModel):
     custody_end: datetime | None = None
 
 
+class CustodyChangeRequest(BaseModel):
+    repository_id: UUID
+    resource_types: list[str] = Field(default=["FHIR"])
+
+
 class CustodyResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

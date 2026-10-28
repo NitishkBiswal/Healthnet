@@ -26,19 +26,26 @@ HealthNet is a Global Federated Health Identity & Interoperability Network desig
 
 ## Quick Start
 
-1. Clone repository
-2. Run docker-compose up
+1. Start PostgreSQL, Redis, Keycloak, and HAPI FHIR:
 ```bash
-docker-compose -f infrastructure/docker-compose.yml up -d
+docker compose -f infrastructure/docker-compose.yml up -d
 ```
-3. Start Backend
+2. Install backend dependencies and apply the database migrations:
 ```bash
-uvicorn app.main:app --reload
+cd backend
+python -m pip install -r requirements.txt
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
 ```
-4. Start Frontend
+   Run migrations only after PostgreSQL is healthy and keep the migration environment's database credentials secret.
+3. In a second terminal, start the frontend:
 ```bash
+cd frontend
+npm install
 npm run dev
 ```
+4. Open `http://localhost:3000`. The development Keycloak issuer is `http://localhost:8180/realms/healthnet`.
+   Production deployments must set `ENVIRONMENT=production` and supply non-default database, Keycloak, and application secrets.
 
 ## Modules
 1. Foundation

@@ -63,7 +63,20 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "protocol": "openid-connect",
-      "publicClient": true
+      "publicClient": true,
+      "protocolMappers": [
+        {
+          "name": "healthnet-backend-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "healthnet-backend",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [

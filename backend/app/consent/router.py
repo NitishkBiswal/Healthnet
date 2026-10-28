@@ -3,7 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.identity.models import PatientIdentity
+from app.provider_trust.models import Provider
 from sqlalchemy import select
+from app.audit.schemas import AuditEventCreate, AuditEventType
+from app.audit.service import AuditService
 from app.consent.schemas import (
     AuthorizedPatientResponse,
     ConsentCheckRequest,
@@ -70,12 +73,29 @@ async def create_consent(
 @router.get("/consents/{consent_id}", response_model=ConsentResponse)
 async def get_consent(
     consent_id: UUID,
-    _: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
     x = await ConsentService(session).get_consent(consent_id)
     if x is None:
         raise HTTPException(404, "Consent not found")
+
+    roles = set(user.get("roles", []))
+    subject = str(user.get("sub", ""))
+    owner = await session.scalar(
+        select(PatientIdentity).where(PatientIdentity.owner_subject == subject)
+    )
+    is_owner = owner is not None and owner.display_health_id == x.health_id
+    provider = await session.scalar(
+        select(Provider).where(
+            Provider.external_id == x.grantee_id,
+            Provider.keycloak_subject == subject,
+            Provider.trust_status == "ACTIVE",
+        )
+    )
+    is_authorized_provider = provider is not None and x.grantee_type == "PROVIDER"
+    if not is_owner and not is_authorized_provider and Role.AUDITOR.value not in roles:
+        raise HTTPException(403, "Not authorized to view this consent")
     return response(x)
 
 
@@ -97,9 +117,31 @@ async def revoke_consent(
     if owner is None or owner.display_health_id != x.health_id:
         raise HTTPException(403, "Patients may only revoke their own consent")
 
-    x = await ConsentService(session).revoke_consent(consent_id)
-    await session.commit()
-    return response(x)
+    try:
+        x = await ConsentService(session).revoke_consent(consent_id)
+        await AuditService(session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.CONSENT_REVOKE,
+                health_id=x.health_id,
+                actor_id=user.get("sub", "unknown"),
+                action="consent revoked",
+                payload={
+                    "consent_id": str(x.id),
+                    "grantee_type": x.grantee_type,
+                    "grantee_id": x.grantee_id,
+                },
+            )
+        )
+        await session.commit()
+        return response(x)
+    except ValueError as exc:
+        await session.rollback()
+        code = (
+            status.HTTP_409_CONFLICT
+            if str(exc) == "Consent has already been revoked"
+            else status.HTTP_404_NOT_FOUND
+        )
+        raise HTTPException(code, str(exc)) from exc
 
 
 @router.get(
