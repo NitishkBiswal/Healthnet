@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 from pydantic import BaseModel,Field
@@ -6,4 +7,4 @@ class AuditEventType(StrEnum):
 class AuditEventCreate(BaseModel):
     event_type:AuditEventType;health_id:str|None=None;actor_id:str=Field(min_length=1,max_length=128);action:str;payload:dict={}
 class AuditEventResponse(BaseModel):
-    id:UUID;event_type:AuditEventType;health_id:str|None;actor_id:str;action:str;payload:dict;prev_event_hash:str|None;event_hash:str
+    id:UUID;event_type:AuditEventType;health_id:str|None;actor_id:str;action:str;payload:dict;prev_event_hash:str|None;event_hash:str;created_at:datetime
