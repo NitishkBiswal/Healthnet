@@ -1,5 +1,7 @@
+import json
 from uuid import uuid4
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +38,17 @@ ABDM_RESOURCE_PROFILES = {
     "MedicationStatement": "MedicationStatement",
 }
 
+
+def clinical_payload_matches(existing: dict, incoming: dict) -> bool:
+    """Treat an identical retry as idempotent, but never overwrite a clinical record."""
+    existing_content = dict(existing)
+    incoming_content = dict(incoming)
+    # Server-managed FHIR metadata changes on read-back; clinical content does not.
+    existing_content.pop("meta", None)
+    incoming_content.pop("meta", None)
+    return json.dumps(existing_content, sort_keys=True, separators=(",", ":")) == json.dumps(
+        incoming_content, sort_keys=True, separators=(",", ":")
+    )
 
 def apply_abdm_profile(payload: dict) -> dict:
     """Attach the applicable ABDM R4 profile declaration for supported resource types."""
@@ -184,7 +197,31 @@ async def submit_patient_record(
             known_types.append("Patient")
 
     try:
-        saved = await client.put_resource(resource_type, resource_id, payload)
+        if resource_type != "Patient":
+            try:
+                existing = await client.get_resource(resource_type, resource_id)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code != 404:
+                    raise
+                existing = None
+
+            if existing is not None:
+                if not clinical_payload_matches(existing, payload):
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "Clinical records are immutable. Submit a corrected record with a new "
+                            "resource ID and preserve the original record."
+                        ),
+                    )
+                saved = existing
+            else:
+                saved = await client.put_resource(resource_type, resource_id, payload)
+        else:
+            saved = await client.put_resource(resource_type, resource_id, payload)
+    except HTTPException:
+        await session.rollback()
+        raise
     except Exception as exc:
         await session.rollback()
         raise HTTPException(status_code=502, detail="Assigned FHIR repository rejected the record") from exc
