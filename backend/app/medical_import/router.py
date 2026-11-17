@@ -9,10 +9,12 @@ import hashlib
 import io
 from datetime import date, datetime
 from typing import Any
+from zipfile import BadZipFile
 
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,13 +49,23 @@ def _rows_from_upload(filename: str, content: bytes) -> list[dict[str, Any]]:
         reader = csv.DictReader(io.StringIO(text))
         if not reader.fieldnames:
             raise ValueError("CSV must contain a header row")
-        rows = [dict(row) for row in reader]
+        rows = []
+        for row in reader:
+            rows.append(dict(row))
+            if len(rows) > MAX_ROWS:
+                raise ValueError(f"Upload exceeds the {MAX_ROWS}-row limit")
     elif suffix in {"xlsx", "xlsm"}:
         workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
         sheet = workbook.active
         values = sheet.iter_rows(values_only=True)
         headers = [str(value).strip() if value is not None else "" for value in next(values, ())]
-        rows = [dict(zip(headers, row)) for row in values if any(value is not None for value in row)]
+        rows = []
+        for row in values:
+            if any(value is not None for value in row):
+                rows.append(dict(zip(headers, row)))
+                if len(rows) > MAX_ROWS:
+                    workbook.close()
+                    raise ValueError(f"Upload exceeds the {MAX_ROWS}-row limit")
         workbook.close()
     else:
         raise ValueError("Only .csv, .xlsx and .xlsm files are supported")
@@ -83,7 +95,7 @@ def _make_resource(row: dict[str, Any], health_id: str, source_hospital: str) ->
             date.fromisoformat(recorded_at)
         except ValueError as exc:
             raise ValueError("recorded_at must be an ISO date or datetime") from exc
-    coding = {"text": display}
+    coding: dict[str, Any] = {"text": display}
     if code:
         default_system = "http://loinc.org" if kind == "OBSERVATION" else "http://snomed.info/sct"
         coding["coding"] = [{"system": str(row.get("code_system") or default_system), "code": code, "display": display}]
@@ -153,7 +165,7 @@ async def import_csv_excel(
     digest = hashlib.sha256(content).hexdigest()
     try:
         rows = _rows_from_upload(file.filename or "", content)
-    except (ValueError, UnicodeDecodeError) as exc:
+    except (ValueError, UnicodeDecodeError, BadZipFile, InvalidFileException) as exc:
         raise HTTPException(422, str(exc)) from exc
     if not rows:
         raise HTTPException(422, "The uploaded file contains no data rows")
