@@ -22,6 +22,7 @@ class PatientRegistrationRequest(BaseModel):
     issuing_jurisdiction: str = Field(min_length=1, max_length=32)
     # Format-only check. HealthNet does not call UIDAI or claim Aadhaar verification.
     aadhaar_number: SecretStr | None = None
+    identifiers: list[PatientIdentifierInput] = Field(default_factory=list)
 
     @field_validator("aadhaar_number")
     @classmethod
@@ -29,7 +30,15 @@ class PatientRegistrationRequest(BaseModel):
         if value is not None and not re.fullmatch(r"\d{12}", value.get_secret_value()):
             raise ValueError("Aadhaar number must contain exactly 12 digits")
         return value
-    identifiers: list[PatientIdentifierInput] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def prevent_plaintext_aadhaar_identifier(self) -> "PatientRegistrationRequest":
+        aadhaar_types = {"AADHAAR", "AADHAAR_NUMBER", "UIDAI_AADHAAR"}
+        if any(item.identifier_type.strip().upper() in aadhaar_types for item in self.identifiers):
+            raise ValueError(
+                "Use the dedicated aadhaar_number field; Aadhaar must not be stored as a plaintext identifier"
+            )
+        return self
 
 
 class PatientResponse(BaseModel):
