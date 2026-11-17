@@ -201,6 +201,7 @@ async def import_csv_excel(
         written_client = None
         written_type = None
         written_id = None
+        row_emergency_added = False
         try:
             if not health_id:
                 raise ValueError("health_id is required")
@@ -261,17 +262,19 @@ async def import_csv_excel(
             await AuditService(session).log_event(AuditEventCreate(
                 event_type=AuditEventType.ACCESS, health_id=health_id, actor_id=actor_id,
                 action="MEDICAL_RECORD_IMPORTED",
-                payload={"resource_type": resource_type, "resource_id": resource["id"], "source_hospital": source_hospital, "file_sha256": digest, "row_number": index},
+                payload={"resource_type": resource_type, "resource_id": resource["id"], "source_hospital": source_hospital, "file_sha256": digest, "row_number": index, "reconciled_existing_resource": existing is not None},
             ))
             if resource_type == "Condition" and _truthy(row.get("is_chronic")) and _truthy(row.get("emergency_relevant")):
                 await _add_emergency_condition(session, health_id, str(row.get("display")).strip())
-                emergency_added += 1
+                row_emergency_added = True
             locator.resource_types = _merge_resource_types(locator.resource_types, {"Condition", "Observation"})
             await savepoint.commit()
             # Commit each row's SQL metadata alongside its external FHIR write.
             # If SQL fails, compensate the FHIR write in the exception handler.
             await session.commit()
             imported += 1
+            if row_emergency_added:
+                emergency_added += 1
             touched_health_ids.add(health_id)
         except Exception as exc:
             await session.rollback()
