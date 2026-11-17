@@ -64,13 +64,14 @@ Run from the repository root after Docker, migrations and Keycloak are running:
 
 The seed creates Health ID INOD000100 for Aarav Sharma, Odisha as the current repository, demo Provider ID PRV-IN-000001, and Patient/Encounter/Condition/Observation/MedicationRequest FHIR data. Kolkata is also registered as a logical migration destination.
 
-The local demo intentionally uses the same HAPI FHIR endpoint for both logical repositories so it does not require multiple HAPI containers. Migration still performs export, idempotent upsert, read-back validation and hash verification, but because both logical repositories share one endpoint it is an in-place demo transfer, not physical isolation. The manifest reports `VALID_SHARED_ENDPOINT`. For a demonstration of physical copying, configure the destination repository with a separate HAPI FHIR endpoint. A production deployment must use separate repository endpoints and secure service-to-service authentication.
+The Docker demo now provisions two HAPI FHIR services: Odisha on `http://localhost:8090/fhir` and Kolkata on `http://localhost:8091/fhir`. Each uses its own PostgreSQL database (`hapi_fhir_db` and `hapi_fhir_kolkata_db`). The seed script assigns the Kolkata endpoint as the destination. Migration therefore performs a real cross-HAPI, cross-database FHIR export/import, destination read-back and hash verification. If the backend itself runs inside Docker, set `KOLKATA_HAPI_FHIR_BASE_URL=http://hapi-fhir-kolkata:8080/fhir` when seeding; the default assumes the backend/seed script runs on the host.
 
 ## Demo walkthrough
 
-1. Start Docker and run Alembic migrations.
-2. Start the backend and frontend.
-3. Run seed-single-repository-demo.py.
+1. Start Docker with `docker compose -f infrastructure/docker-compose.yml up -d`. On a brand-new PostgreSQL volume, `init-databases.sql` creates the Kolkata database automatically. If you already have the old `healthnet_pgdata` volume, create it once with `docker exec healthnet-postgres psql -U healthnet -d postgres -c "CREATE DATABASE hapi_fhir_kolkata_db OWNER healthnet;"`.
+2. Wait until both HAPI services are healthy, then run Alembic migrations.
+3. Start the backend and frontend.
+4. Run seed-single-repository-demo.py.
 4. Login as testpatient and show INOD000100 plus the current Odisha repository.
 5. Login as testdoctor, use Provider ID PRV-IN-000001, obtain patient consent, and request the longitudinal view.
 6. In Admin, create a migration from IN-OD-FHIR to IN-WB-KOL-FHIR.
@@ -83,7 +84,7 @@ The local demo intentionally uses the same HAPI FHIR endpoint for both logical r
 One Health ID, one current authoritative repository, controlled migration when custody changes.
 
 
-## Recommended physical repository deployment
+## Repository database architecture
 
 For a convincing multi-repository demonstration, run one FHIR server per repository, each backed by its own PostgreSQL database (for example, Odisha HAPI -> `hapi_odisha_db`, Kolkata HAPI -> `hapi_kolkata_db`). The central HealthNet database stores identities, consent, custody history and the active Record Locator; it should not store the clinical payloads. Configure each repository's `base_url` to its own HAPI endpoint. During transfer, HealthNet exports FHIR resources from the source, imports them idempotently into the destination, reads them back and verifies the content hash before switching the active locator. Keep the source read-only for a defined retention period and preserve provenance/audit history.
 
