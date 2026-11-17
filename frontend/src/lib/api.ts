@@ -34,6 +34,7 @@ export interface Patient {
   id?: string; display_health_id: string; issuing_jurisdiction: string; given_name: string; family_name: string;
   date_of_birth: string; sex?: string; phone?: string; email?: string; address?: string; status: string;
 }
+export interface AadhaarStatus { has_aadhaar: boolean; masked_value?: string | null; }
 export interface PatientRegistration {
   given_name: string; family_name: string; date_of_birth: string; sex?: string; phone?: string; email?: string;
   address?: string; issuing_jurisdiction: string;
@@ -76,6 +77,8 @@ export const api = {
   currentPrincipal: () => request<Principal>("/authorization/me"),
   patient: (healthId: string) => request<Patient>("/identity/" + encodeURIComponent(healthId)),
   myPatient: () => request<Patient>("/identity/me"),
+  myAadhaarStatus: () => request<AadhaarStatus>("/identity/me/aadhaar"),
+  updateMyAadhaar: (aadhaar_number: string) => request<AadhaarStatus>("/identity/me/aadhaar", { method: "PUT", body: JSON.stringify({ aadhaar_number }) }),
   registerPatient: (body: PatientRegistration) => request<RegistrationResult>("/identity/register", { method: "POST", body: JSON.stringify(body) }),
   myDuplicateReviews: () => request<DuplicateReview[]>("/identity/duplicate-reviews/mine"),
   duplicateReviews: () => request<DuplicateReview[]>("/identity/duplicate-reviews"),
