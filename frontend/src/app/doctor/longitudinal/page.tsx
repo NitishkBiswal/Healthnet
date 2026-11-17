@@ -188,7 +188,15 @@ function DoctorLongitudinalViewContent() {
     void load();
   }, [healthId, patientSummary?.purpose, patientSummary?.scopes]);
 
-  const records = view?.records ?? [];
+  const records = useMemo(() => [...(view?.records ?? [])].sort((a, b) => {
+    const aDate = getRecordDate(a.resource ?? {});
+    const bDate = getRecordDate(b.resource ?? {});
+    return bDate - aDate;
+  }), [view?.records]);
+  const chronicConditions = useMemo(
+    () => records.filter(isChronicCondition),
+    [records],
+  );
   const errors = view?.errors ?? [];
 
   return (
