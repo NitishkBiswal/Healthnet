@@ -22,7 +22,7 @@ from app.audit.service import AuditService
 from app.core.database import get_db
 from app.emergency.models import EmergencyHealthProfile
 from app.fhir.client import FHIRClient
-from app.fhir.router import ABDM_PROFILE_BASE, apply_abdm_profile, clinical_payload_matches
+from app.fhir.router import apply_abdm_profile, clinical_payload_matches
 from app.identity.service import IdentityService
 from app.provenance.schemas import ProvenanceRecord
 from app.provenance.service import ProvenanceService
