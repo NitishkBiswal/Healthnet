@@ -99,6 +99,9 @@ async def seed_database(patient_subject: str, provider_subject: str) -> str:
                 status="ONLINE",
             )
             session.add(kolkata)
+        else:
+            kolkata.base_url = KOLKATA_FHIR_BASE
+            kolkata.description = "Demo destination repository backed by its own HAPI FHIR service and PostgreSQL database."
 
         jurisdiction = await session.scalar(
             select(Jurisdiction).where(Jurisdiction.code == "IN-OD")
