@@ -25,7 +25,7 @@ async def patient(health_id:str,_:dict=Depends(require_auditor),session:AsyncSes
 @router.get("/audit/integrity")
 async def integrity(_:dict=Depends(require_auditor),session:AsyncSession=Depends(get_db)):return {"valid":await AuditService(session).verify_chain_integrity()}
 @router.get("/imports")
-async def imported_records(_:dict=Depends(require_role(Role.AUDITOR)),session:AsyncSession=Depends(get_db)):
+async def imported_records(_:dict=Depends(require_auditor),session:AsyncSession=Depends(get_db)):
     result=await session.execute(
         select(AuditEvent)
         .where(AuditEvent.action=="MEDICAL_RECORD_IMPORTED")
