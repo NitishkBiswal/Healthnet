@@ -109,3 +109,19 @@ class LocationHistoryRequest(BaseModel):
     )
     started_at: datetime
     ended_at: datetime | None = None
+
+
+class AadhaarUpdateRequest(BaseModel):
+    aadhaar_number: SecretStr
+
+    @field_validator("aadhaar_number")
+    @classmethod
+    def validate_aadhaar_number(cls, value: SecretStr) -> SecretStr:
+        if not re.fullmatch(r"\\d{12}", value.get_secret_value()):
+            raise ValueError("Aadhaar number must contain exactly 12 digits")
+        return value
+
+
+class AadhaarStatusResponse(BaseModel):
+    has_aadhaar: bool
+    masked_value: str | None = None
