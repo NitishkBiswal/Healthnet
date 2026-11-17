@@ -42,3 +42,14 @@ def test_patient_can_update_aadhaar_with_format_only_validation() -> None:
 
     with pytest.raises(ValidationError):
         AadhaarUpdateRequest(aadhaar_number="not-an-aadhaar")
+
+
+def test_aadhaar_cannot_be_saved_through_plaintext_identifier_list() -> None:
+    with pytest.raises(ValidationError):
+        PatientRegistrationRequest(
+            given_name="Test",
+            family_name="Patient",
+            date_of_birth="2000-01-01",
+            issuing_jurisdiction="IN-WB",
+            identifiers=[{"identifier_type": "AADHAAR", "identifier_value": "123456789012"}],
+        )
