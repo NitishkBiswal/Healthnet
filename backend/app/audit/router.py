@@ -1,7 +1,9 @@
 import json
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession\nfrom sqlalchemy import select, desc\nfrom app.audit.models import AuditEvent
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, desc
+from app.audit.models import AuditEvent
 from app.audit.schemas import AuditEventCreate, AuditEventResponse
 from app.audit.service import AuditService
 from app.core.database import get_db
