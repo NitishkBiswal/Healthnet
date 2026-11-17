@@ -7,7 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.identity.models import DuplicateReview, PatientIdentity
+from app.identity.identifiers import encrypt_aadhaar
+from app.audit.schemas import AuditEventCreate, AuditEventType
+from app.audit.service import AuditService
 from app.identity.schemas import (
+    AadhaarStatusResponse,
+    AadhaarUpdateRequest,
     DuplicateReviewDecision,
     DuplicateReviewResponse,
     IdentityMergeRequest,
@@ -158,6 +163,52 @@ async def get_my_patient(
     if patient is None:
         raise HTTPException(status_code=404, detail="No Health ID is linked to this account")
     return PatientResponse.model_validate(patient)
+
+
+
+
+@router.get("/me/aadhaar", response_model=AadhaarStatusResponse)
+async def get_my_aadhaar_status(
+    user: dict = Depends(require_patient),
+    session: AsyncSession = Depends(get_db),
+) -> AadhaarStatusResponse:
+    patient = await session.scalar(
+        select(PatientIdentity).where(PatientIdentity.owner_subject == str(user.get("sub")))
+    )
+    if patient is None:
+        raise HTTPException(status_code=404, detail="No Health ID is linked to this account")
+    return AadhaarStatusResponse(
+        has_aadhaar=bool(patient.aadhaar_encrypted),
+        masked_value=f"XXXX-XXXX-{patient.aadhaar_last4}" if patient.aadhaar_last4 else None,
+    )
+
+
+@router.put("/me/aadhaar", response_model=AadhaarStatusResponse)
+async def update_my_aadhaar(
+    request: AadhaarUpdateRequest,
+    user: dict = Depends(require_patient),
+    session: AsyncSession = Depends(get_db),
+) -> AadhaarStatusResponse:
+    patient = await session.scalar(
+        select(PatientIdentity).where(PatientIdentity.owner_subject == str(user.get("sub")))
+    )
+    if patient is None:
+        raise HTTPException(status_code=404, detail="No Health ID is linked to this account")
+
+    value = request.aadhaar_number.get_secret_value()
+    patient.aadhaar_encrypted = encrypt_aadhaar(value)
+    patient.aadhaar_last4 = value[-4:]
+    await AuditService(session).log_event(
+        AuditEventCreate(
+            event_type=AuditEventType.ACCESS,
+            health_id=patient.display_health_id,
+            actor_id=str(user.get("sub", "unknown")),
+            action="AADHAAR_IDENTIFIER_UPDATED",
+            payload={"identifier_type": "AADHAAR", "masked_value": f"XXXX-XXXX-{value[-4:]}"},
+        )
+    )
+    await session.commit()
+    return AadhaarStatusResponse(has_aadhaar=True, masked_value=f"XXXX-XXXX-{value[-4:]}")
 
 
 @router.get("/{health_id}", response_model=PatientResponse)
