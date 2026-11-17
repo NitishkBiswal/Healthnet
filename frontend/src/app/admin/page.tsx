@@ -18,7 +18,7 @@ export default function AdminPortal() {
   const [migrationMessage, setMigrationMessage] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<MedicalImportResult | null>(null);
-  const [importBusy, setImportBusy] = useState(false);\n  const [importFile, setImportFile] = useState<File | null>(null);\n  const [importResult, setImportResult] = useState<MedicalImportResult | null>(null);\n  const [importBusy, setImportBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
