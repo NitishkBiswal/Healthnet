@@ -117,7 +117,7 @@ class AadhaarUpdateRequest(BaseModel):
     @field_validator("aadhaar_number")
     @classmethod
     def validate_aadhaar_number(cls, value: SecretStr) -> SecretStr:
-        if not re.fullmatch(r"\\d{12}", value.get_secret_value()):
+        if not re.fullmatch(r"\d{12}", value.get_secret_value()):
             raise ValueError("Aadhaar number must contain exactly 12 digits")
         return value
 
