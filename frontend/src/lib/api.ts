@@ -37,7 +37,7 @@ export interface Patient {
 export interface AadhaarStatus { has_aadhaar: boolean; masked_value?: string | null; }
 export interface PatientRegistration {
   given_name: string; family_name: string; date_of_birth: string; sex?: string; phone?: string; email?: string;
-  address?: string; issuing_jurisdiction: string;
+  address?: string; aadhaar_number?: string; issuing_jurisdiction: string;
   identifiers?: { identifier_type: string; identifier_value: string; issuing_authority?: string }[];
 }
 export interface MatchCandidate { patient_id: string; health_id: string; confidence: number; band: string; }
