@@ -11,6 +11,8 @@ type LongitudinalRecord = {
   resource?: Record<string, unknown>;
 };
 
+type EmergencyProfile = { health_id: string; blood_group?: string | null; allergies: string[]; medications: string[]; conditions: string[]; emergency_contacts: string[]; };
+
 type LongitudinalResponse = {
   health_id?: string;
   current_repository?: {
@@ -152,6 +154,8 @@ function DoctorLongitudinalViewContent() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [location, setLocation] = useState<CurrentRecordLocation | null>(null);
   const [view, setView] = useState<LongitudinalResponse | null>(null);
+  const [emergency, setEmergency] = useState<EmergencyProfile | null>(null);
+  const [emergencyError, setEmergencyError] = useState("");
   const [authorized, setAuthorized] = useState<AuthorizedPatient[]>([]);
   const [error, setError] = useState("");
 
@@ -180,6 +184,14 @@ function DoctorLongitudinalViewContent() {
         setPatient(patientData);
         setLocation(locationData);
         setView(longitudinalData as LongitudinalResponse);
+        try {
+          const emergencyData = await api.emergency(healthId, patientSummary?.purpose ?? "TREATMENT", patientSummary?.scopes?.[0] ?? "clinical");
+          setEmergency(emergencyData);
+          setEmergencyError("");
+        } catch (emergencyReason: unknown) {
+          setEmergency(null);
+          setEmergencyError(emergencyReason instanceof Error ? emergencyReason.message : "Emergency details are not available under the current authorization.");
+        }
       } catch (reason: unknown) {
         setError(reason instanceof Error ? reason.message : "Unable to load the patient's longitudinal record");
       }
@@ -266,6 +278,31 @@ function DoctorLongitudinalViewContent() {
                 HealthNet retrieves this patient's clinical history from this repository only. Other repositories are not searched for this patient.
               </p>
             </div>
+          </Card>
+
+          <Card title="Emergency summary">
+            {emergency ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-rose-800">Blood group</p>
+                  <p className="mt-1 text-lg font-bold text-rose-950">{emergency.blood_group || "Not recorded"}</p>
+                </div>
+                {([
+                  ["Allergies", emergency.allergies],
+                  ["Current medications", emergency.medications],
+                  ["Important conditions", emergency.conditions],
+                  ["Emergency contacts", emergency.emergency_contacts],
+                ] as [string, string[]][]).map(([label, values]) => (
+                  <div key={label} className="rounded-lg border border-slate-200 p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">{values.length ? values.join(", ") : "Not recorded"}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600">{emergencyError || "Emergency details are not available."}</p>
+            )}
+            <p className="mt-3 text-xs text-slate-500">Emergency details are shown only when the provider has active patient consent for the requested scope or a valid break-glass authorization.</p>
           </Card>
 
           <Card title="Chronic conditions">
