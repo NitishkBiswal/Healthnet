@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { api, type CurrentRecordLocation, type DuplicateReview, type Patient, type Transfer } from "@/lib/api";
+import { api, type Consent, type CurrentRecordLocation, type DuplicateReview, type Patient, type Transfer } from "@/lib/api";
 import { Card, PortalShell } from "@/components/portal-shell";
 
 export default function PatientPortal() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [reviews, setReviews] = useState<DuplicateReview[]>([]);
-  const [consents, setConsents] = useState<unknown>(null);
+  const [consents, setConsents] = useState<Consent[]>([]);
   const [emergency, setEmergency] = useState<unknown>(null);
   const [error, setError] = useState("");
   const [doctorId, setDoctorId] = useState("");
@@ -24,6 +24,7 @@ export default function PatientPortal() {
   useEffect(() => {
     void api.myPatient().then(async (value) => {
       setPatient(value);
+      try { setConsents(await api.consents(value.display_health_id)); } catch {}
       try { setCurrentLocation(await api.currentRecordLocation(value.display_health_id)); } catch {}
       try { setTransfers(await api.myTransfers()); } catch {}
     }).catch(() => {});
@@ -61,6 +62,18 @@ export default function PatientPortal() {
       setConsents(await api.consents(patient.display_health_id));
     } catch (reason: unknown) {
       setConsentMessage(reason instanceof Error ? reason.message : "Unable to grant consent");
+    }
+  }
+
+  async function revokeConsent(consentId: string) {
+    if (!patient) return;
+    setConsentMessage("");
+    try {
+      const updated = await api.revokeConsent(consentId);
+      setConsents((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setConsentMessage("Consent revoked. This provider can no longer use this consent for new access.");
+    } catch (reason: unknown) {
+      setConsentMessage(reason instanceof Error ? reason.message : "Unable to revoke consent");
     }
   }
 
@@ -167,7 +180,25 @@ export default function PatientPortal() {
               Emergency profile
             </button>
           </div>
-          {consents !== null && <pre className="mt-4 max-h-80 overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(consents, null, 2)}</pre>}
+          {consents.length > 0 ? (
+            <div className="mt-4 space-y-3">
+              <h3 className="font-bold text-slate-950">Access granted to providers</h3>
+              {consents.map((consent) => (
+                <div key={consent.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 text-sm">
+                    <p className="font-semibold text-slate-950">{consent.grantee_type}: {consent.grantee_id}</p>
+                    <p className="text-slate-600">Purpose: {consent.purpose} · Scopes: {consent.scopes.join(", ")}</p>
+                    <p className="text-slate-600">Status: <span className={consent.status === "ACTIVE" ? "font-bold text-emerald-700" : "font-bold text-slate-500"}>{consent.status}</span></p>
+                    {consent.valid_until && <p className="text-slate-500">Valid until {new Date(consent.valid_until).toLocaleString()}</p>}
+                    {consent.revoked_at && <p className="text-slate-500">Revoked {new Date(consent.revoked_at).toLocaleString()}</p>}
+                  </div>
+                  {consent.status === "ACTIVE" && (
+                    <button onClick={() => void revokeConsent(consent.id)} className="shrink-0 rounded-lg border border-red-300 px-3 py-2 text-sm font-bold text-red-700 hover:bg-red-50">Revoke access</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : <p className="mt-4 text-sm text-slate-600">No consent records found. Grant access to a trusted provider above.</p>}
           {emergency !== null && <pre className="mt-4 max-h-80 overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(emergency, null, 2)}</pre>}
           {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
         </Card>
