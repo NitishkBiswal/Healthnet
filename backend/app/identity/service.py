@@ -17,6 +17,7 @@ from app.identity.models import (
     PatientLocationHistory,
 )
 from app.identity.schemas import LocationHistoryRequest, PatientRegistrationRequest
+from app.identity.identifiers import encrypt_aadhaar
 from app.record_locator.models import RecordLocator
 from app.repository.models import EHRCustody, Repository
 
@@ -149,6 +150,8 @@ class IdentityService:
             phone=request.phone,
             email=request.email,
             address=request.address,
+            aadhaar_encrypted=encrypt_aadhaar(request.aadhaar_number) if request.aadhaar_number else None,
+            aadhaar_last4=request.aadhaar_number[-4:] if request.aadhaar_number else None,
             owner_subject=requesting_subject,
         )
         self.session.add(patient)
