@@ -1,8 +1,6 @@
-from datetime import date
-
 import pytest
 
-from app.medical_import.router import _make_resource, _rows_from_upload
+from app.medical_import.router import _make_resource, _merge_resource_types, _rows_from_upload
 from app.main import app
 
 
@@ -19,6 +17,7 @@ def test_import_builds_abdm_condition_and_observation() -> None:
     assert condition["subject"]["reference"] == "Patient/INOD000100"
     assert condition["verificationStatus"]["coding"][0]["code"] == "unconfirmed"
     assert condition["meta"]["profile"][0].endswith("/Condition")
+    assert condition["category"][0]["coding"][0]["code"] == "problem-list-item"
 
     observation = _make_resource(
         {
@@ -58,3 +57,8 @@ def test_import_and_auditor_routes_are_registered() -> None:
     paths = app.openapi()["paths"]
     assert "post" in paths["/api/v1/fhir/imports/csv-excel"]
     assert "get" in paths["/api/v1/audit/imports"]
+
+
+def test_imported_resource_types_are_added_without_losing_existing_types() -> None:
+    assert _merge_resource_types("Patient,Observation", {"Condition", "Observation"}) == "Condition,Observation,Patient"
+    assert _merge_resource_types(None, {"Condition", "Observation"}) == "Condition,Observation"
