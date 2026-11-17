@@ -194,12 +194,13 @@ async def seed_database(patient_subject: str, provider_subject: str) -> str:
 
 
 def fhir_resources(health_id: str) -> list[dict]:
-    return [
+    resources = [
     {
         "resourceType": "Patient",
         "id": HEALTH_ID,
-        "identifier": [{"system": "urn:healthnet:health-id", "value": health_id}],
-        "name": [{"family": "Sharma", "given": ["Aarav"]}],
+        "meta": {"profile": ["https://nrces.in/ndhm/fhir/r4/StructureDefinition/Patient"]},
+        "identifier": [{"system": "urn:healthnet:health-id", "value": health_id, "type": {"text": "HealthNet Health ID"}}],
+        "name": [{"text": "Aarav Sharma", "family": "Sharma", "given": ["Aarav"]}],
         "gender": "male",
         "birthDate": "1998-04-12",
         "address": [{"city": "Bhubaneswar", "state": "Odisha", "country": "IN"}],
@@ -260,7 +261,17 @@ def fhir_resources(health_id: str) -> list[dict]:
         "subject": {"reference": f"Patient/{HEALTH_ID}"},
         "dosageInstruction": [{"text": "500 mg twice daily with meals"}],
     },
-]
+    ]
+
+    # Declare the intended ABDM R4 profile on each demo resource. The receiver
+    # still needs formal profile/terminology validation before production exchange.
+    for resource in resources:
+        resource_type = resource["resourceType"]
+        profile = f"https://nrces.in/ndhm/fhir/r4/StructureDefinition/{resource_type}"
+        meta = resource.setdefault("meta", {})
+        meta.setdefault("profile", [profile])
+
+    return resources
 
 
 async def main() -> None:
