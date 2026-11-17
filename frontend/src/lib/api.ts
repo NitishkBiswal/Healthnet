@@ -114,7 +114,7 @@ export const api = {
     request<{ provider:Provider; username:string; message:string }>("/provider-trust/providers/onboard",{method:"POST",body:JSON.stringify(body)}),
   createProvider: (body: { external_id: string; given_name: string; family_name: string; license_number: string; jurisdiction: string; keycloak_subject?: string }) =>
     request<Provider>("/provider-trust/providers", { method: "POST", body: JSON.stringify(body) }),
-  emergency: (healthId: string) => request<Record<string, unknown>>("/emergency/patients/" + encodeURIComponent(healthId) + "/emergency-profile"),
+  emergency: (healthId: string, purpose = "TREATMENT", scope = "clinical") => request<{ health_id: string; blood_group?: string | null; allergies: string[]; medications: string[]; conditions: string[]; emergency_contacts: string[] }>("/emergency/patients/" + encodeURIComponent(healthId) + "/emergency-profile?purpose=" + encodeURIComponent(purpose) + "&scope=" + encodeURIComponent(scope)),
   longitudinal: (healthId: string, purpose = "TREATMENT", scope = "clinical") =>
     request<Record<string, unknown>>("/longitudinal/patients/longitudinal-view", { method: "POST", body: JSON.stringify({ health_id: healthId, purpose, scope }) }),
   repositories: () => request<Repository[]>("/repository/repositories"),
