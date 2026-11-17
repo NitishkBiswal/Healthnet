@@ -1,7 +1,7 @@
 import json
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession\nfrom sqlalchemy import select, desc\nfrom app.audit.models import AuditEvent
 from app.audit.schemas import AuditEventCreate, AuditEventResponse
 from app.audit.service import AuditService
 from app.core.database import get_db
@@ -22,3 +22,12 @@ async def get(event_id:UUID,_:dict=Depends(require_auditor),session:AsyncSession
 async def patient(health_id:str,_:dict=Depends(require_auditor),session:AsyncSession=Depends(get_db)):return [response(x) for x in await AuditService(session).get_patient_events(health_id)]
 @router.get("/audit/integrity")
 async def integrity(_:dict=Depends(require_auditor),session:AsyncSession=Depends(get_db)):return {"valid":await AuditService(session).verify_chain_integrity()}
+@router.get("/imports")
+async def imported_records(_:dict=Depends(require_role(Role.AUDITOR)),session:AsyncSession=Depends(get_db)):
+    result=await session.execute(
+        select(AuditEvent)
+        .where(AuditEvent.action=="MEDICAL_RECORD_IMPORTED")
+        .order_by(desc(AuditEvent.created_at))
+        .limit(500)
+    )
+    return [response(event) for event in result.scalars().all()]
