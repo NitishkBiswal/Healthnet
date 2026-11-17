@@ -185,6 +185,10 @@ async def import_csv_excel(
         health_id = str(row.get("health_id") or "").strip()
         source_hospital = str(row.get("source_hospital") or "Unspecified source hospital").strip()
         savepoint = await session.begin_nested()
+        resource_written = False
+        written_client = None
+        written_type = None
+        written_id = None
         try:
             if not health_id:
                 raise ValueError("health_id is required")
@@ -224,6 +228,8 @@ async def import_csv_excel(
                     raise ValueError("Duplicate row: this exact clinical resource already exists")
                 raise ValueError("Resource ID already exists with different clinical content; use a new record_id")
             await client.put_resource(resource_type, resource["id"], resource)
+            resource_written = True
+            written_client, written_type, written_id = client, resource_type, resource["id"]
             await ProvenanceService(session).record_provenance(ProvenanceRecord(
                 health_id=health_id, repository_id=repository.id, resource_type=resource_type,
                 resource_id=resource["id"], source_system=source_hospital, actor_id=actor_id,
@@ -237,14 +243,24 @@ async def import_csv_excel(
             if resource_type == "Condition" and _truthy(row.get("is_chronic")) and _truthy(row.get("emergency_relevant")):
                 await _add_emergency_condition(session, health_id, str(row.get("display")).strip())
                 emergency_added += 1
+            supported_types = {value.strip() for value in (locator.resource_types or "").split(",") if value.strip()}
+            supported_types.update({"Condition", "Observation"})
+            locator.resource_types = ",".join(sorted(supported_types))
             await savepoint.commit()
+            # Commit each row's SQL metadata alongside its external FHIR write.
+            # If SQL fails, compensate the FHIR write in the exception handler.
+            await session.commit()
             imported += 1
             touched_health_ids.add(health_id)
         except Exception as exc:
-            await savepoint.rollback()
-            failed.append({"row": index, "health_id": health_id or None, "error": str(exc)[:300]})
-
-    await session.commit()
+            await session.rollback()
+            cleanup_note = ""
+            if resource_written and written_client and written_type and written_id:
+                try:
+                    await written_client.delete_resource(written_type, written_id)
+                except Exception as cleanup_exc:
+                    cleanup_note = f"; FHIR compensation failed ({type(cleanup_exc).__name__}); reconcile resource {written_type}/{written_id}"
+            failed.append({"row": index, "health_id": health_id or None, "error": (str(exc)[:220] + cleanup_note)[:300]})
     return {
         "accepted": imported,
         "failed": len(failed),
