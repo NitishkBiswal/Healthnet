@@ -1,5 +1,5 @@
 from app.identity.identifiers import decrypt_aadhaar, encrypt_aadhaar
-from app.identity.schemas import PatientRegistrationRequest, PatientResponse
+from app.identity.schemas import AadhaarUpdateRequest, PatientRegistrationRequest, PatientResponse
 from pydantic import ValidationError
 import pytest
 
@@ -34,3 +34,11 @@ def test_aadhaar_encryption_round_trip_and_ciphertext_is_not_plaintext() -> None
 def test_patient_api_response_never_contains_aadhaar_fields() -> None:
     assert "aadhaar_encrypted" not in PatientResponse.model_fields
     assert "aadhaar_last4" not in PatientResponse.model_fields
+
+
+def test_patient_can_update_aadhaar_with_format_only_validation() -> None:
+    request = AadhaarUpdateRequest(aadhaar_number="123456789012")
+    assert request.aadhaar_number.get_secret_value() == "123456789012"
+
+    with pytest.raises(ValidationError):
+        AadhaarUpdateRequest(aadhaar_number="not-an-aadhaar")
