@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.models import AuditEvent
 from app.audit.schemas import AuditEventCreate, AuditEventType
 from app.audit.service import AuditService
 from app.consent.service import ConsentService
@@ -78,7 +79,17 @@ async def get_emergency_profile(
             )
             .order_by(BreakGlassEvent.invoked_at.desc())
             .limit(1)
+            .with_for_update()
         )
+        if break_glass is not None:
+            already_used = await session.scalar(
+                select(AuditEvent.id).where(
+                    AuditEvent.action == "EMERGENCY_PROFILE_VIEWED",
+                    AuditEvent.payload.contains(str(break_glass.id)),
+                ).limit(1)
+            )
+            if already_used is not None:
+                break_glass = None
     if not consent_allowed and break_glass is None:
         raise HTTPException(
             403,
