@@ -38,6 +38,12 @@ MAX_ROWS = 5000
 REQUIRED_COLUMNS = {"health_id", "record_type", "record_id", "display", "recorded_at"}
 
 
+def _merge_resource_types(current: str | None, additions: set[str]) -> str:
+    values = {value.strip() for value in (current or "").split(",") if value.strip()}
+    values.update(additions)
+    return ",".join(sorted(values))
+
+
 def _truthy(value: Any) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "y"}
 
@@ -243,9 +249,7 @@ async def import_csv_excel(
             if resource_type == "Condition" and _truthy(row.get("is_chronic")) and _truthy(row.get("emergency_relevant")):
                 await _add_emergency_condition(session, health_id, str(row.get("display")).strip())
                 emergency_added += 1
-            supported_types = {value.strip() for value in (locator.resource_types or "").split(",") if value.strip()}
-            supported_types.update({"Condition", "Observation"})
-            locator.resource_types = ",".join(sorted(supported_types))
+            locator.resource_types = _merge_resource_types(locator.resource_types, {"Condition", "Observation"})
             await savepoint.commit()
             # Commit each row's SQL metadata alongside its external FHIR write.
             # If SQL fails, compensate the FHIR write in the exception handler.
