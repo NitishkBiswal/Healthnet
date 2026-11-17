@@ -97,7 +97,7 @@ export default function AdminPortal() {
     }
   }
 
-  async function importRecords() {\n    if (!importFile) { setError("Choose a CSV or Excel file first"); return; }\n    setError(""); setImportResult(null); setImportBusy(true);\n    try { setImportResult(await api.importMedicalRecords(importFile)); }\n    catch (e) { setError(e instanceof Error ? e.message : "Medical record import failed"); }\n    finally { setImportBusy(false); }\n  }\n\n  async function importRecords() {
+  async function importRecords() {
     if (!importFile) { setError("Choose a CSV or Excel file first"); return; }
     setError(""); setImportResult(null); setImportBusy(true);
     try { setImportResult(await api.importMedicalRecords(importFile)); }
