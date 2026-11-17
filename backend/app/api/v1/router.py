@@ -9,6 +9,7 @@ from app.identity.router import router as identity_router
 from app.jurisdiction_policy.router import router as jurisdiction_policy_router
 from app.longitudinal.router import router as longitudinal_router
 from app.migration.router import router as migration_router
+from app.medical_import.router import router as medical_import_router
 from app.provider_trust.router import router as provider_trust_router
 from app.provenance.router import router as provenance_router
 from app.record_locator.router import router as record_locator_router
@@ -28,4 +29,5 @@ api_router.include_router(emergency_router,prefix="/emergency",tags=["Emergency"
 api_router.include_router(audit_router,prefix="/audit",tags=["Audit"])
 api_router.include_router(provenance_router,prefix="/provenance",tags=["Provenance"])
 api_router.include_router(migration_router,prefix="/migration",tags=["Migration"])
+api_router.include_router(medical_import_router,prefix="/fhir",tags=["Medical Record Import"])
 api_router.include_router(trust_ledger_router,prefix="/trust-ledger",tags=["Trust Ledger"])
