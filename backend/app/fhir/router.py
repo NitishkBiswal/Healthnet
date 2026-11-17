@@ -34,6 +34,7 @@ ABDM_RESOURCE_PROFILES = {
     "CarePlan": "CarePlan",
     "ServiceRequest": "ServiceRequest",
     "MedicationStatement": "MedicationStatement",
+    "Bundle": "DocumentBundle",
 }
 
 
@@ -158,6 +159,12 @@ async def submit_patient_record(
         for identifier in payload.get("identifier", []):
             if isinstance(identifier, dict) and identifier.get("system") == "urn:healthnet:health-id" and identifier.get("value") == health_id:
                 identifier.setdefault("type", {"text": "HealthNet Health ID"})
+        if not payload.get("name"):
+            payload["name"] = [{
+                "text": f"{patient.given_name} {patient.family_name}",
+                "family": patient.family_name,
+                "given": [patient.given_name],
+            }]
         for name in payload.get("name", []):
             if isinstance(name, dict):
                 given = name.get("given", [])
