@@ -1,7 +1,6 @@
+import re
 from datetime import date, datetime
 from uuid import UUID
-
-import re
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
@@ -22,7 +21,14 @@ class PatientRegistrationRequest(BaseModel):
     address: str | None = None
     issuing_jurisdiction: str = Field(min_length=1, max_length=32)
     # Format-only check. HealthNet does not call UIDAI or claim Aadhaar verification.
-    aadhaar_number: str | None = Field(default=None, pattern=r"^\d{12}$")
+    aadhaar_number: SecretStr | None = None
+
+    @field_validator("aadhaar_number")
+    @classmethod
+    def validate_aadhaar_number(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not re.fullmatch(r"\d{12}", value.get_secret_value()):
+            raise ValueError("Aadhaar number must contain exactly 12 digits")
+        return value
     identifiers: list[PatientIdentifierInput] = Field(default_factory=list)
 
 
