@@ -145,10 +145,13 @@ async def submit_patient_record(
     payload = apply_abdm_profile(payload)
     if resource_type == "Patient":
         for identifier in payload.get("identifier", []):
-            if identifier.get("system") == "urn:healthnet:health-id" and identifier.get("value") == health_id:
+            if isinstance(identifier, dict) and identifier.get("system") == "urn:healthnet:health-id" and identifier.get("value") == health_id:
                 identifier.setdefault("type", {"text": "HealthNet Health ID"})
         for name in payload.get("name", []):
-            name.setdefault("text", " ".join([*name.get("given", []), name.get("family", "")]).strip())
+            if isinstance(name, dict):
+                given = name.get("given", [])
+                given_names = given if isinstance(given, list) else [str(given)]
+                name.setdefault("text", " ".join([*given_names, name.get("family", "")]).strip())
 
     resource_id = payload.get("id") or (health_id if resource_type == "Patient" else str(uuid4()))
     payload["id"] = resource_id
