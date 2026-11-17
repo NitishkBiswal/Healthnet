@@ -1,6 +1,4 @@
 import json
-from uuid import uuid4
-
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
