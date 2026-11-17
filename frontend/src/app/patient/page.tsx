@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { api, type Consent, type CurrentRecordLocation, type DuplicateReview, type Patient, type Transfer } from "@/lib/api";
+import { api, type AadhaarStatus, type Consent, type CurrentRecordLocation, type DuplicateReview, type Patient, type Transfer } from "@/lib/api";
 import { Card, PortalShell } from "@/components/portal-shell";
 
 export default function PatientPortal() {
@@ -20,10 +20,14 @@ export default function PatientPortal() {
   const [currentLocation, setCurrentLocation] = useState<CurrentRecordLocation | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [migrationMessage, setMigrationMessage] = useState("");
+  const [aadhaarStatus, setAadhaarStatus] = useState<AadhaarStatus | null>(null);
+  const [aadhaarNumber, setAadhaarNumber] = useState("");
+  const [aadhaarMessage, setAadhaarMessage] = useState("");
 
   useEffect(() => {
     void api.myPatient().then(async (value) => {
       setPatient(value);
+      try { setAadhaarStatus(await api.myAadhaarStatus()); } catch {}
       try { setConsents(await api.consents(value.display_health_id)); } catch {}
       try { setCurrentLocation(await api.currentRecordLocation(value.display_health_id)); } catch {}
       try { setTransfers(await api.myTransfers()); } catch {}
@@ -62,6 +66,18 @@ export default function PatientPortal() {
       setConsents(await api.consents(patient.display_health_id));
     } catch (reason: unknown) {
       setConsentMessage(reason instanceof Error ? reason.message : "Unable to grant consent");
+    }
+  }
+
+  async function saveAadhaar() {
+    setAadhaarMessage("");
+    try {
+      const status = await api.updateMyAadhaar(aadhaarNumber);
+      setAadhaarStatus(status);
+      setAadhaarNumber("");
+      setAadhaarMessage("Aadhaar saved securely. HealthNet has not verified it with UIDAI.");
+    } catch (reason: unknown) {
+      setAadhaarMessage(reason instanceof Error ? reason.message : "Unable to save Aadhaar");
     }
   }
 
@@ -117,6 +133,21 @@ export default function PatientPortal() {
             ))}
           </div>
           {migrationMessage && <p className="mt-3 text-sm font-semibold text-slate-700">{migrationMessage}</p>}
+        </Card>
+      )}
+
+      {patient && (
+        <Card title="Additional identity identifier">
+          <div className="space-y-3">
+            <p className="text-sm text-slate-700">Aadhaar is optional. It is encrypted in the identity database, and only you can manage it here. It is not sent to doctors or included in clinical FHIR records.</p>
+            <p className="text-sm font-semibold text-slate-800">Current status: {aadhaarStatus?.has_aadhaar ? `Saved (${aadhaarStatus.masked_value})` : "Not added"}</p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input type="password" inputMode="numeric" autoComplete="off" maxLength={12} value={aadhaarNumber} onChange={(e) => setAadhaarNumber(e.target.value.replace(/\\D/g, "").slice(0, 12))} placeholder="Enter 12-digit Aadhaar number" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <button onClick={() => void saveAadhaar()} disabled={aadhaarNumber.length !== 12} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">Save Aadhaar</button>
+            </div>
+            {aadhaarMessage && <p className="text-sm text-slate-700">{aadhaarMessage}</p>}
+            <p className="text-xs text-slate-500">HealthNet checks only the 12-digit format. No UIDAI authentication or verification is performed.</p>
+          </div>
         </Card>
       )}
 
