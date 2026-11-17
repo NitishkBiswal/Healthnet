@@ -53,3 +53,25 @@ def test_abdm_r4_profile_is_added_to_supported_resources() -> None:
         "https://nrces.in/ndhm/fhir/r4/StructureDefinition/Observation"
     ]
 
+
+
+def test_clinical_records_allow_identical_retries_but_reject_edits() -> None:
+    from app.fhir.router import clinical_payload_matches
+
+    original = {
+        "resourceType": "Observation",
+        "id": "obs-1",
+        "status": "final",
+        "valueQuantity": {"value": 120, "unit": "mmHg"},
+        "meta": {"versionId": "1"},
+    }
+    retry = {
+        "resourceType": "Observation",
+        "id": "obs-1",
+        "status": "final",
+        "valueQuantity": {"value": 120, "unit": "mmHg"},
+        "meta": {"profile": ["https://nrces.in/ndhm/fhir/r4/StructureDefinition/Observation"]},
+    }
+    corrected = {**retry, "valueQuantity": {"value": 130, "unit": "mmHg"}}
+    assert clinical_payload_matches(original, retry)
+    assert not clinical_payload_matches(original, corrected)
