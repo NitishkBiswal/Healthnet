@@ -43,3 +43,13 @@ def test_hospital_ingestion_route_is_registered() -> None:
 def test_patient_consent_revocation_route_is_registered() -> None:
     route = app.openapi()["paths"]["/api/v1/consent/consents/{consent_id}"]
     assert "delete" in route
+
+
+def test_abdm_r4_profile_is_added_to_supported_resources() -> None:
+    from app.fhir.router import apply_abdm_profile
+
+    resource = apply_abdm_profile({"resourceType": "Observation", "status": "final"})
+    assert resource["meta"]["profile"] == [
+        "https://nrces.in/ndhm/fhir/r4/StructureDefinition/Observation"
+    ]
+
