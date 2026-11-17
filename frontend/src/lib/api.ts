@@ -67,7 +67,7 @@ export interface Principal {
   subject: string; email?: string; roles: string[]; provider_id?: string | null;
   provider_name?: string | null; provider_status?: string | null;
 }
-export interface AuditEvent { id: string; event_type: string; health_id?: string; actor_id: string; action: string; payload: string; event_hash: string; created_at: string; }
+export interface AuditEvent { id: string; event_type: string; health_id?: string; actor_id: string; action: string; payload: Record<string, unknown>; event_hash: string; created_at: string; }
 export interface Transfer { id: string; health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; state: string; authorization_reference?: string; package_hash?: string; error_message?: string; created_at: string; updated_at: string; }
 export interface CurrentRecordLocation {
   health_id: string; repository_id: string; repository_code: string; repository_name: string;
@@ -124,7 +124,8 @@ export const api = {
       "/fhir/patients/" + encodeURIComponent(healthId) + "/records",
       { method: "POST", body: JSON.stringify(resource) },
     ),
-  audits: (healthId: string) => request<AuditEvent[]>("/audit/patient/" + encodeURIComponent(healthId)),\n  importedRecordAudits: () => request<AuditEvent[]>("/audit/imports"),
+  audits: (healthId: string) => request<AuditEvent[]>("/audit/patient/" + encodeURIComponent(healthId)),
+  importedRecordAudits: () => request<AuditEvent[]>("/audit/imports"),
   verifyLedger: () => request<{ valid: boolean; entries_checked: number }>("/trust-ledger/ledger/verify"),
   createTransfer: (body: { health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string }) =>
     request<Transfer>("/migration/transfer-requests", { method: "POST", body: JSON.stringify(body) }),
