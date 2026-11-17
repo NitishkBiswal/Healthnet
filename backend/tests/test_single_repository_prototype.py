@@ -38,3 +38,8 @@ def test_transfer_execution_accepts_token_and_server_discovered_count() -> None:
 def test_hospital_ingestion_route_is_registered() -> None:
     route = app.openapi()["paths"]["/api/v1/fhir/patients/{health_id}/records"]
     assert "post" in route
+
+
+def test_patient_consent_revocation_route_is_registered() -> None:
+    route = app.openapi()["paths"]["/api/v1/consent/consents/{consent_id}"]
+    assert "delete" in route
