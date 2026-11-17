@@ -28,6 +28,7 @@ from app.repository.models import EHRCustody, Repository
 
 HEALTH_ID = "INOD000100"
 FHIR_BASE = settings.HAPI_FHIR_BASE_URL.rstrip("/")
+KOLKATA_FHIR_BASE = os.getenv("KOLKATA_HAPI_FHIR_BASE_URL", "http://localhost:8091/fhir").rstrip("/")
 PATIENT_NAME = ("Aarav", "Sharma")
 
 
@@ -93,8 +94,8 @@ async def seed_database(patient_subject: str, provider_subject: str) -> str:
                 code="IN-WB-KOL-FHIR",
                 name="Kolkata Health Records Repository",
                 jurisdiction="IN-WB",
-                base_url=FHIR_BASE,
-                description="Demo destination repository. Production would use a dedicated FHIR endpoint.",
+                base_url=KOLKATA_FHIR_BASE,
+                description="Demo destination repository backed by its own HAPI FHIR service and PostgreSQL database.",
                 status="ONLINE",
             )
             session.add(kolkata)
@@ -273,11 +274,12 @@ async def main() -> None:
     print(f"Health ID: {health_id}")
     print("Current repository: IN-OD-FHIR (Odisha Health Records Repository)")
     print("Demo provider ID: PRV-IN-000001")
-    print(f"FHIR endpoint: {FHIR_BASE}")
+    print(f"Odisha FHIR endpoint: {FHIR_BASE}")
+    print(f"Kolkata FHIR endpoint: {KOLKATA_FHIR_BASE}")
     print()
     print("The doctor retrieves this patient's records from the current repository only.")
     print("The Admin Portal can request a move to IN-WB-KOL-FHIR, then the patient authorizes it.")
-    print("The local demo uses one HAPI endpoint for both logical repositories; production would use separate repository endpoints.")
+    print("Odisha and Kolkata use separate HAPI FHIR services and separate PostgreSQL databases.")
 
 
 if __name__ == "__main__":
