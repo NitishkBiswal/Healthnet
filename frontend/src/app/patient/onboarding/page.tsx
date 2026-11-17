@@ -15,6 +15,7 @@ export default function PatientOnboardingPage() {
     phone: "",
     email: "",
     address: "",
+    aadhaar_number: "",
     issuing_jurisdiction: "IN-OD",
   });
   const [result, setResult] = useState<RegistrationResult | null>(null);
@@ -34,6 +35,7 @@ export default function PatientOnboardingPage() {
         phone: form.phone || undefined,
         email: form.email || undefined,
         address: form.address || undefined,
+        aadhaar_number: form.aadhaar_number || undefined,
       });
       setResult(response);
     } catch (reason: unknown) {
@@ -56,6 +58,7 @@ export default function PatientOnboardingPage() {
           <Field placeholder="Phone (optional)" value={form.phone} onChange={(e) => update("phone", e.target.value)} />
           <Field type="email" placeholder="Email (optional)" value={form.email} onChange={(e) => update("email", e.target.value)} />
           <Field placeholder="Address (optional)" value={form.address} onChange={(e) => update("address", e.target.value)} />
+          <Field placeholder="Aadhaar number (optional, 12 digits)" inputMode="numeric" maxLength={12} value={form.aadhaar_number} onChange={(e) => update("aadhaar_number", e.target.value.replace(/\\D/g, "").slice(0, 12))} />
           <select value={form.issuing_jurisdiction} onChange={(e) => update("issuing_jurisdiction", e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
             <option value="IN-OD">India — Odisha</option>
             <option value="IN-KA">India — Karnataka</option>
@@ -63,7 +66,7 @@ export default function PatientOnboardingPage() {
           </select>
         </div>
         <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-          HealthNet checks for an existing identity before issuing a new Health ID. Ambiguous matches go to an Auditor instead of creating a second identity.
+          HealthNet checks for an existing identity before issuing a new Health ID. Ambiguous matches go to an Auditor instead of creating a second identity. Aadhaar is optional, encrypted in the identity database, and not verified with UIDAI. It is not copied into clinical records or shown to providers.
         </div>
         {error && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
         {result && (
