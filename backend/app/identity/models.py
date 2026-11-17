@@ -35,6 +35,10 @@ class PatientIdentity(Base):
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Aadhaar is held only in the identity vault, encrypted at application level.
+    # It is deliberately excluded from API response schemas and clinical FHIR payloads.
+    aadhaar_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    aadhaar_last4: Mapped[str | None] = mapped_column(String(4), nullable=True)
     owner_subject: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
     status: Mapped[str] = mapped_column(String(24), default=IdentityStatus.ACTIVE.value)
     superseded_by: Mapped[UUID | None] = mapped_column(
