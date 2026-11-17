@@ -142,7 +142,7 @@ export default function PatientPortal() {
             <p className="text-sm text-slate-700">Aadhaar is optional. It is encrypted in the identity database, and only you can manage it here. It is not sent to doctors or included in clinical FHIR records.</p>
             <p className="text-sm font-semibold text-slate-800">Current status: {aadhaarStatus?.has_aadhaar ? `Saved (${aadhaarStatus.masked_value})` : "Not added"}</p>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <input type="password" inputMode="numeric" autoComplete="off" maxLength={12} value={aadhaarNumber} onChange={(e) => setAadhaarNumber(e.target.value.replace(/\\D/g, "").slice(0, 12))} placeholder="Enter 12-digit Aadhaar number" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <input type="password" inputMode="numeric" autoComplete="off" maxLength={12} value={aadhaarNumber} onChange={(e) => setAadhaarNumber(e.target.value.replace(/\D/g, "").slice(0, 12))} placeholder="Enter 12-digit Aadhaar number" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               <button onClick={() => void saveAadhaar()} disabled={aadhaarNumber.length !== 12} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">Save Aadhaar</button>
             </div>
             {aadhaarMessage && <p className="text-sm text-slate-700">{aadhaarMessage}</p>}
