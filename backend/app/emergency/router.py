@@ -16,6 +16,10 @@ from app.security.dependencies import require_role
 from app.security.rbac import Role
 
 router = APIRouter(tags=["Emergency"])
+
+
+def require_provider():
+    return require_role(Role.PROVIDER)
 BREAK_GLASS_VALIDITY = timedelta(minutes=15)
 
 
@@ -47,7 +51,7 @@ async def _active_provider(user: dict, session: AsyncSession) -> Provider:
 @router.get("/patients/{health_id}/emergency-profile", response_model=EmergencyProfileResponse)
 async def get_emergency_profile(
     health_id: str,
-    user: dict = Depends(require_role(Role.PROVIDER)),
+    user: dict = Depends(require_provider),
     purpose: str = Query(default="TREATMENT", min_length=1, max_length=64),
     scope: str = Query(default="clinical", min_length=1, max_length=64),
     session: AsyncSession = Depends(get_db),
