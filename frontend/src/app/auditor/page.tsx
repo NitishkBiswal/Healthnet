@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type DuplicateReview } from "@/lib/api";
+import { api, type AuditEvent, type DuplicateReview } from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
 export default function AuditorPortal() {
   const [healthId, setHealthId] = useState("");
   const [events, setEvents] = useState<unknown>(null);
   const [integrity, setIntegrity] = useState<unknown>(null);
-  const [reviews, setReviews] = useState<DuplicateReview[]>([]);
+  const [reviews, setReviews] = useState<DuplicateReview[]>([]);\n  const [importAudits, setImportAudits] = useState<AuditEvent[]>([]);
   const [error, setError] = useState("");
 
   async function loadReviews() {
@@ -91,6 +91,21 @@ export default function AuditorPortal() {
           {events !== null && <pre className="mt-4 max-h-[500px] overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(events, null, 2)}</pre>}
         </Card>
 
+        <Card title="Imported medical record audit">
+          <p className="mb-3 text-sm text-slate-700">Read-only history of records imported by administrators. Auditors can inspect source, actor, resource identifiers and file hash; they cannot change clinical records.</p>
+          {importAudits.length === 0 ? <p className="text-sm text-slate-600">No imported-record events found.</p> : (
+            <div className="max-h-[420px] space-y-2 overflow-auto">
+              {importAudits.map((event) => (
+                <div key={event.id} className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs">
+                  <p className="font-bold text-slate-950">{event.health_id} · {event.action}</p>
+                  <p className="text-slate-700">Actor: {event.actor_id} · {event.created_at}</p>
+                  <p className="text-slate-700">{event.payload}</p>
+                  <p className="break-all text-slate-500">Hash: {event.event_hash}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
         <Card title="Trust ledger integrity">
           <button onClick={verify} className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">Verify chain</button>
           {integrity !== null && <pre className="mt-4 rounded-lg bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(integrity, null, 2)}</pre>}
