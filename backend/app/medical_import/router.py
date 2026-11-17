@@ -172,6 +172,7 @@ async def import_csv_excel(
         row = {str(key).strip().lower(): value for key, value in raw.items() if key is not None}
         health_id = str(row.get("health_id") or "").strip()
         source_hospital = str(row.get("source_hospital") or "Unspecified source hospital").strip()
+        savepoint = await session.begin_nested()
         try:
             if not health_id:
                 raise ValueError("health_id is required")
@@ -211,10 +212,11 @@ async def import_csv_excel(
             if resource_type == "Condition" and _truthy(row.get("is_chronic")) and _truthy(row.get("emergency_relevant")):
                 await _add_emergency_condition(session, health_id, str(row.get("display")).strip())
                 emergency_added += 1
+            await savepoint.commit()
             imported += 1
             touched_health_ids.add(health_id)
         except Exception as exc:
-            await session.rollback()
+            await savepoint.rollback()
             failed.append({"row": index, "health_id": health_id or None, "error": str(exc)[:300]})
 
     await session.commit()
