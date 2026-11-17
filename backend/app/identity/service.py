@@ -150,8 +150,8 @@ class IdentityService:
             phone=request.phone,
             email=request.email,
             address=request.address,
-            aadhaar_encrypted=encrypt_aadhaar(request.aadhaar_number) if request.aadhaar_number else None,
-            aadhaar_last4=request.aadhaar_number[-4:] if request.aadhaar_number else None,
+            aadhaar_encrypted=encrypt_aadhaar(request.aadhaar_number.get_secret_value()) if request.aadhaar_number else None,
+            aadhaar_last4=request.aadhaar_number.get_secret_value()[-4:] if request.aadhaar_number else None,
             owner_subject=requesting_subject,
         )
         self.session.add(patient)
