@@ -34,7 +34,6 @@ ABDM_RESOURCE_PROFILES = {
     "CarePlan": "CarePlan",
     "ServiceRequest": "ServiceRequest",
     "MedicationStatement": "MedicationStatement",
-    "Bundle": "DocumentBundle",
 }
 
 
@@ -54,8 +53,14 @@ def apply_abdm_profile(payload: dict) -> dict:
     resource_type = payload.get("resourceType")
     profile_name = ABDM_RESOURCE_PROFILES.get(resource_type)
     if profile_name:
-        meta = payload.setdefault("meta", {})
-        profiles = meta.setdefault("profile", [])
+        meta = payload.get("meta")
+        if not isinstance(meta, dict):
+            meta = {}
+            payload["meta"] = meta
+        profiles = meta.get("profile")
+        if not isinstance(profiles, list):
+            profiles = []
+            meta["profile"] = profiles
         canonical = ABDM_PROFILE_BASE + profile_name
         if canonical not in profiles:
             profiles.append(canonical)
