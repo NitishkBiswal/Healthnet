@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type CurrentRecordLocation, type Provider, type Repository, type Transfer } from "@/lib/api";
+import { api, type CurrentRecordLocation, type MedicalImportResult, type Provider, type Repository, type Transfer } from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
 export default function AdminPortal() {
@@ -15,7 +15,7 @@ export default function AdminPortal() {
   const [error, setError] = useState("");
   const [currentLocation, setCurrentLocation] = useState<CurrentRecordLocation | null>(null);
   const [transfer, setTransfer] = useState<Transfer | null>(null);
-  const [migrationMessage, setMigrationMessage] = useState("");
+  const [migrationMessage, setMigrationMessage] = useState("");\n  const [importFile, setImportFile] = useState<File | null>(null);\n  const [importResult, setImportResult] = useState<MedicalImportResult | null>(null);\n  const [importBusy, setImportBusy] = useState(false);
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -94,7 +94,7 @@ export default function AdminPortal() {
     }
   }
 
-  async function registerProvider() {
+  async function importRecords() {\n    if (!importFile) { setError("Choose a CSV or Excel file first"); return; }\n    setError(""); setImportResult(null); setImportBusy(true);\n    try { setImportResult(await api.importMedicalRecords(importFile)); }\n    catch (e) { setError(e instanceof Error ? e.message : "Medical record import failed"); }\n    finally { setImportBusy(false); }\n  }\n\n  async function registerProvider() {
     setProviderMessage("");
     try {
       const result = await api.onboardProvider({username:username.trim(),email:email.trim(),initial_password:initialPassword,
