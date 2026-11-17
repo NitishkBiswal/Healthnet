@@ -1,7 +1,9 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+import re
+
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 
 class PatientIdentifierInput(BaseModel):
