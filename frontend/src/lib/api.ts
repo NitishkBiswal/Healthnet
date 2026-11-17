@@ -34,6 +34,7 @@ export interface Patient {
   id?: string; display_health_id: string; issuing_jurisdiction: string; given_name: string; family_name: string;
   date_of_birth: string; sex?: string; phone?: string; email?: string; address?: string; status: string;
 }
+export interface MedicalImportResult { accepted: number; failed: number; emergency_conditions_added: number; patients_affected: number; file_sha256: string; errors: { row: number; health_id?: string | null; error: string }[]; message: string; }
 export interface AadhaarStatus { has_aadhaar: boolean; masked_value?: string | null; }
 export interface PatientRegistration {
   given_name: string; family_name: string; date_of_birth: string; sex?: string; phone?: string; email?: string;
@@ -75,6 +76,25 @@ export interface CurrentRecordLocation {
 
 export const api = {
   currentPrincipal: () => request<Principal>("/authorization/me"),
+  importMedicalRecords: async (file: File) => {
+    const token = getAccessToken();
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch(API_BASE_URL + "/fhir/imports/csv-excel", {
+      method: "POST",
+      headers: token ? { Authorization: "Bearer " + token } : {},
+      body: form,
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      let message = body || "HTTP " + response.status;
+      try { const parsed = JSON.parse(body) as { detail?: string }; if (parsed.detail) message = parsed.detail; } catch {}
+      throw new Error(message);
+    }
+    return response.json() as Promise<MedicalImportResult>;
+  },
+
   patient: (healthId: string) => request<Patient>("/identity/" + encodeURIComponent(healthId)),
   myPatient: () => request<Patient>("/identity/me"),
   myAadhaarStatus: () => request<AadhaarStatus>("/identity/me/aadhaar"),
