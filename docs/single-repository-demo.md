@@ -116,3 +116,21 @@ Official references:
 - NRCeS, EHR Standards for India: https://www.nrces.in/standards/ehr-standards-for-india
 - NRCeS, ABDM FHIR R4 Implementation Guide v6.5.0: https://nrces.in/ndhm/fhir/r4/
 - ABDM HIP/HIU guidelines: https://abdm.gov.in/strapicms/uploads/HIP_HIU_Guidelines_f85df336ec.pdf
+
+
+## CSV and Excel legacy-record import
+
+The Admin Portal includes **Import existing medical records (CSV / Excel)**. The backend accepts .csv, .xlsx and .xlsm uploads up to 10 MB and 5,000 rows. Each row is independently validated and routed through the patient's active Record Locator; a row for an unknown Health ID, missing repository, invalid date, duplicate resource ID or unsupported type is rejected without stopping other rows.
+
+Supported normalized record types in this first iteration:
+
+- CONDITION -> ABDM-profiled FHIR R4 Condition.
+- OBSERVATION -> ABDM-profiled FHIR R4 Observation.
+
+Required columns: health_id, record_type, record_id, display, recorded_at. Optional columns: code, code_system, status, value, unit, source_hospital, is_chronic, emergency_relevant. The downloadable template is at frontend/public/medical-record-import-template.csv. Use ISO dates/datetimes. Use stable, unique resource IDs per patient. A numeric Observation value is converted to a FHIR Quantity; a non-numeric value is stored as a string. Imported Conditions are marked unconfirmed because the source file is not independently verified. The source hospital, row number and upload file SHA-256 are retained in provenance/audit metadata.
+
+**Permissions:** Admin can import. Auditor receives read-only access to the imported-record audit feed and cannot write or alter clinical resources. This initial feature does not yet import PDF, DICOM, HL7 messages, prescriptions or arbitrary Excel layouts; source systems must map their export columns to the template first.
+
+**Emergency summary:** Only a Condition row explicitly marked with both is_chronic=TRUE and emergency_relevant=TRUE is added to the patient's emergency conditions field. This is an administrative import flag, not automated medical triage. Review the emergency summary for accuracy and completeness.
+
+**Retention:** HealthNet does not automatically delete clinical records after six months. Old records may still be needed for diagnosis, continuity of care, medico-legal purposes or future treatment. In particular, chronic conditions such as diabetes, cardiovascular disease and other long-term complications should remain in the longitudinal record and, when clinically appropriate, the emergency summary. A production retention/archive policy must be configured against applicable law, record type and hospital policy; do not equate six months of inactivity with permission to delete.
