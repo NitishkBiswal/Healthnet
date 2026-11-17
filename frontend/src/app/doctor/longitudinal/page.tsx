@@ -35,6 +35,52 @@ function getDisplayValue(resource: Record<string, unknown>, path: string[]): str
   return typeof value === "string" || typeof value === "number" ? String(value) : null;
 }
 
+function getRecordDate(resource: Record<string, unknown>): number {
+  const candidates = [
+    getDisplayValue(resource, ["recordedDate"]),
+    getDisplayValue(resource, ["effectiveDateTime"]),
+    getDisplayValue(resource, ["effectivePeriod", "start"]),
+    getDisplayValue(resource, ["period", "start"]),
+    getDisplayValue(resource, ["onsetDateTime"]),
+    getDisplayValue(resource, ["issued"]),
+    getDisplayValue(resource, ["authoredOn"]),
+    getDisplayValue(resource, ["meta", "lastUpdated"]),
+  ];
+  for (const value of candidates) {
+    if (!value) continue;
+    const timestamp = Date.parse(value);
+    if (!Number.isNaN(timestamp)) return timestamp;
+  }
+  return 0;
+}
+
+function getConditionName(resource: Record<string, unknown>): string {
+  return getDisplayValue(resource, ["code", "coding", "0", "display"])
+    ?? getDisplayValue(resource, ["code", "text"])
+    ?? "Recorded condition";
+}
+
+function isChronicCondition(record: LongitudinalRecord): boolean {
+  const resource = record.resource ?? {};
+  if ((record.resource_type ?? resource.resourceType) !== "Condition") return false;
+  const categories = Array.isArray(resource.category) ? resource.category : [];
+  return categories.some((category) => {
+    if (!category || typeof category !== "object") return false;
+    const item = category as Record<string, unknown>;
+    const codings = Array.isArray(item.coding) ? item.coding : [];
+    return codings.some((coding) => {
+      if (!coding || typeof coding !== "object") return false;
+      const code = (coding as Record<string, unknown>).code;
+      return code === "problem-list-item";
+    });
+  });
+}
+
+function conditionStatus(resource: Record<string, unknown>): string {
+  return getDisplayValue(resource, ["clinicalStatus", "coding", "0", "code"])
+    ?? "Status not recorded";
+}
+
 function RecordCard({ record }: { record: LongitudinalRecord }) {
   const resource = record.resource ?? {};
   const type = record.resource_type ?? String(resource.resourceType ?? "Clinical record");
@@ -214,12 +260,54 @@ function DoctorLongitudinalViewContent() {
             </div>
           </Card>
 
-          <Card title="Clinical history">
+          <Card title="Chronic conditions">
+            {chronicConditions.length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm text-slate-700">No conditions have been explicitly marked as chronic in the available structured records.</p>
+                <p className="mt-1 text-xs text-slate-500">Conditions are highlighted here when the source record identifies them as ongoing problem-list items.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {chronicConditions.map((record, index) => {
+                  const resource = record.resource ?? {};
+                  const date = getDisplayValue(resource, ["recordedDate"]) ?? getDisplayValue(resource, ["onsetDateTime"]);
+                  return (
+                    <article key={`chronic-${resource.id ?? index}`} className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-bold text-amber-950">{getConditionName(resource)}</p>
+                          <p className="mt-1 text-xs font-semibold text-amber-900">Chronic / ongoing condition · {conditionStatus(resource)}</p>
+                        </div>
+                        {date && <span className="text-xs text-amber-900">Recorded {new Date(date).toLocaleDateString()}</span>}
+                      </div>
+                      <details className="mt-3 text-xs text-amber-950">
+                        <summary className="cursor-pointer font-semibold">View original condition details</summary>
+                        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/80 p-3">{JSON.stringify(resource, null, 2)}</pre>
+                      </details>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          <Card title="Medical history · Latest first">
             {records.length === 0 ? (
               <p className="text-sm text-slate-600">No clinical records were returned.</p>
             ) : (
               <div className="space-y-3">
-                {records.map((record, index) => <RecordCard key={`${record.resource_type}-${index}`} record={record} />)}
+                {records.map((record, index) => (
+                  <div key={`${record.resource_type}-${record.resource?.id ?? index}`}>
+                    {index === 0 && (
+                      <p className="mb-2 text-xs font-bold uppercase tracking-wide text-cyan-800">Latest record</p>
+                    )}
+                    <RecordCard record={record} />
+                    <details className="mt-1 px-2 text-xs text-slate-500">
+                      <summary className="cursor-pointer font-semibold">View original record</summary>
+                      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 text-slate-700">{JSON.stringify(record.resource ?? {}, null, 2)}</pre>
+                    </details>
+                  </div>
+                ))}
               </div>
             )}
             <div className="mt-5 flex flex-wrap gap-3 text-xs font-semibold text-slate-600">
