@@ -15,7 +15,10 @@ export default function AdminPortal() {
   const [error, setError] = useState("");
   const [currentLocation, setCurrentLocation] = useState<CurrentRecordLocation | null>(null);
   const [transfer, setTransfer] = useState<Transfer | null>(null);
-  const [migrationMessage, setMigrationMessage] = useState("");\n  const [importFile, setImportFile] = useState<File | null>(null);\n  const [importResult, setImportResult] = useState<MedicalImportResult | null>(null);\n  const [importBusy, setImportBusy] = useState(false);
+  const [migrationMessage, setMigrationMessage] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importResult, setImportResult] = useState<MedicalImportResult | null>(null);
+  const [importBusy, setImportBusy] = useState(false);\n  const [importFile, setImportFile] = useState<File | null>(null);\n  const [importResult, setImportResult] = useState<MedicalImportResult | null>(null);\n  const [importBusy, setImportBusy] = useState(false);
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -94,7 +97,15 @@ export default function AdminPortal() {
     }
   }
 
-  async function importRecords() {\n    if (!importFile) { setError("Choose a CSV or Excel file first"); return; }\n    setError(""); setImportResult(null); setImportBusy(true);\n    try { setImportResult(await api.importMedicalRecords(importFile)); }\n    catch (e) { setError(e instanceof Error ? e.message : "Medical record import failed"); }\n    finally { setImportBusy(false); }\n  }\n\n  async function registerProvider() {
+  async function importRecords() {\n    if (!importFile) { setError("Choose a CSV or Excel file first"); return; }\n    setError(""); setImportResult(null); setImportBusy(true);\n    try { setImportResult(await api.importMedicalRecords(importFile)); }\n    catch (e) { setError(e instanceof Error ? e.message : "Medical record import failed"); }\n    finally { setImportBusy(false); }\n  }\n\n  async function importRecords() {
+    if (!importFile) { setError("Choose a CSV or Excel file first"); return; }
+    setError(""); setImportResult(null); setImportBusy(true);
+    try { setImportResult(await api.importMedicalRecords(importFile)); }
+    catch (e) { setError(e instanceof Error ? e.message : "Medical record import failed"); }
+    finally { setImportBusy(false); }
+  }
+
+  async function registerProvider() {
     setProviderMessage("");
     try {
       const result = await api.onboardProvider({username:username.trim(),email:email.trim(),initial_password:initialPassword,
@@ -244,6 +255,29 @@ export default function AdminPortal() {
             </div>
           </Card>
         </div>
+      </div>
+
+      <div className="mt-5">
+        <Card title="Import existing medical records (CSV / Excel)">
+          <p className="text-sm text-slate-700">Admin-only import. Each row is matched to a HealthNet Health ID and routed to that patient's active repository. Supported record types: CONDITION and OBSERVATION.</p>
+          <div className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs text-slate-700">
+            Required columns: <strong>health_id, record_type, record_id, display, recorded_at</strong>. Optional: code, code_system, status, value, unit, source_hospital, is_chronic, emergency_relevant. Dates must use ISO format (YYYY-MM-DD or ISO datetime). Max 5,000 rows / 10 MB.
+            <p className="mt-2">Only mark a condition for the emergency summary when both is_chronic and emergency_relevant are TRUE. Do not upload real patient data to an unsecured demo environment.</p>
+            <a className="mt-2 inline-block font-semibold underline" href="/medical-record-import-template.csv" download>Download CSV template</a>
+          </div>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <input type="file" accept=".csv,.xlsx,.xlsm" onChange={(event) => { setImportFile(event.target.files?.[0] ?? null); setImportResult(null); }} className="block w-full text-sm text-slate-800" />
+            <button disabled={!importFile || importBusy} onClick={importRecords} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{importBusy ? "Importing..." : "Validate and import"}</button>
+          </div>
+          {importResult && (
+            <div className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm">
+              <p className="font-bold">Import finished</p>
+              <p>Accepted: {importResult.accepted} · Failed: {importResult.failed} · Emergency summary additions: {importResult.emergency_conditions_added} · Patients: {importResult.patients_affected}</p>
+              <p className="mt-1 break-all text-xs text-slate-600">File SHA-256: {importResult.file_sha256}</p>
+              {importResult.errors.length > 0 && <div className="mt-3 max-h-56 overflow-auto"><p className="font-semibold">Rows requiring correction</p>{importResult.errors.map((item) => <p key={item.row} className="mt-1 text-xs">Row {item.row} ({item.health_id ?? "no Health ID"}): {item.error}</p>)}</div>}
+            </div>
+          )}
+        </Card>
       </div>
 
       {error && (
