@@ -72,7 +72,7 @@ The Docker demo now provisions two HAPI FHIR services: Odisha on `http://localho
 2. Wait until both HAPI services are healthy, then run Alembic migrations.
 3. Start the backend and frontend.
 4. Run `scripts/seed-single-repository-demo.py`.
-5. Login as `testpatient` and show Health ID `INOD000100` plus the current Odisha repository.
+5. Login as `testpatient`, show Health ID `INOD000100` and the current Odisha repository. In **Additional identity identifier**, enter a synthetic 12-digit test value (never a real Aadhaar number), save it, and show only the masked last four digits.
 6. Login as `testdoctor`, note Provider ID `PRV-IN-000001`, and confirm the patient is not visible before consent.
 7. Login as `testpatient`, grant the doctor clinical consent, then return to the Doctor Portal and open the longitudinal record.
 8. Return to the Patient Portal and click **Revoke access**. Refresh the Doctor Portal and show that the patient is no longer authorized; a direct longitudinal-view request should be denied.
