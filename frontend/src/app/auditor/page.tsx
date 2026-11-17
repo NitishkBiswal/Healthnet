@@ -9,7 +9,8 @@ export default function AuditorPortal() {
   const [healthId, setHealthId] = useState("");
   const [events, setEvents] = useState<unknown>(null);
   const [integrity, setIntegrity] = useState<unknown>(null);
-  const [reviews, setReviews] = useState<DuplicateReview[]>([]);\n  const [importAudits, setImportAudits] = useState<AuditEvent[]>([]);
+  const [reviews, setReviews] = useState<DuplicateReview[]>([]);
+  const [importAudits, setImportAudits] = useState<AuditEvent[]>([]);
   const [error, setError] = useState("");
 
   async function loadReviews() {
@@ -22,6 +23,7 @@ export default function AuditorPortal() {
 
   useEffect(() => {
     void loadReviews();
+    api.importedRecordAudits().then(setImportAudits).catch((reason) => setError(reason instanceof Error ? reason.message : "Could not load import audit events"));
   }, []);
 
   async function audit() {
@@ -99,7 +101,7 @@ export default function AuditorPortal() {
                 <div key={event.id} className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs">
                   <p className="font-bold text-slate-950">{event.health_id} · {event.action}</p>
                   <p className="text-slate-700">Actor: {event.actor_id} · {event.created_at}</p>
-                  <p className="text-slate-700">{event.payload}</p>
+                  <p className="text-slate-700">{JSON.stringify(event.payload)}</p>
                   <p className="break-all text-slate-500">Hash: {event.event_hash}</p>
                 </div>
               ))}
