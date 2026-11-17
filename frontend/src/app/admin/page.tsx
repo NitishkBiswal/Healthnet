@@ -267,7 +267,7 @@ export default function AdminPortal() {
           </div>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
             <input type="file" accept=".csv,.xlsx,.xlsm" onChange={(event) => { setImportFile(event.target.files?.[0] ?? null); setImportResult(null); }} className="block w-full text-sm text-slate-800" />
-            <button disabled={!importFile || importBusy} onClick={importRecords} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{importBusy ? "Importing..." : "Validate and import"}</button>
+            <button disabled={!importFile || importBusy} onClick={importRecords} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{importBusy ? "Importing..." : "Import valid rows"}</button>
           </div>
           {importResult && (
             <div className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm">
