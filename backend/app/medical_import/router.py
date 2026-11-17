@@ -198,9 +198,9 @@ async def import_csv_excel(
         source_hospital = str(row.get("source_hospital") or "Unspecified source hospital").strip()
         savepoint = await session.begin_nested()
         resource_written = False
-        written_client = None
-        written_type = None
-        written_id = None
+        written_client: FHIRClient | None = None
+        written_type: str | None = None
+        written_id: str | None = None
         row_emergency_added = False
         try:
             if not health_id:
