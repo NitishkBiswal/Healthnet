@@ -25,6 +25,7 @@ from app.emergency.models import EmergencyHealthProfile
 from app.fhir.client import FHIRClient
 from app.fhir.router import apply_abdm_profile, clinical_payload_matches
 from app.identity.service import IdentityService
+from app.provenance.models import RecordProvenance
 from app.provenance.schemas import ProvenanceRecord
 from app.provenance.service import ProvenanceService
 from app.record_locator.models import RecordLocator
@@ -230,16 +231,27 @@ async def import_csv_excel(
                     raise
                 existing = None
             if existing is not None:
-                if clinical_payload_matches(existing, resource):
-                    raise ValueError("Duplicate row: this exact clinical resource already exists")
-                raise ValueError("Resource ID already exists with different clinical content; use a new record_id")
-            await client.put_resource(resource_type, resource["id"], resource)
-            resource_written = True
-            written_client, written_type, written_id = client, resource_type, resource["id"]
+                if not clinical_payload_matches(existing, resource):
+                    raise ValueError("Resource ID already exists with different clinical content; use a new record_id")
+                # A previous request may have reached HAPI FHIR but failed before
+                # its SQL commit. Reconcile that orphaned resource on safe retry.
+                prior_provenance = await session.scalar(
+                    select(RecordProvenance.id).where(
+                        RecordProvenance.health_id == health_id,
+                        RecordProvenance.resource_type == resource_type,
+                        RecordProvenance.resource_id == resource["id"],
+                    ).limit(1)
+                )
+                if prior_provenance is not None:
+                    raise ValueError("Duplicate row: this clinical resource is already imported")
+            else:
+                await client.put_resource(resource_type, resource["id"], resource)
+                resource_written = True
+                written_client, written_type, written_id = client, resource_type, resource["id"]
             await ProvenanceService(session).record_provenance(ProvenanceRecord(
                 health_id=health_id, repository_id=repository.id, resource_type=resource_type,
                 resource_id=resource["id"], source_system=source_hospital, actor_id=actor_id,
-                action="BULK_FILE_IMPORT", details={"file_sha256": digest, "row_number": index},
+                action="BULK_FILE_IMPORT", details={"file_sha256": digest, "row_number": index, "reconciled_existing_resource": existing is not None},
             ))
             await AuditService(session).log_event(AuditEventCreate(
                 event_type=AuditEventType.ACCESS, health_id=health_id, actor_id=actor_id,
