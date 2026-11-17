@@ -71,13 +71,15 @@ The Docker demo now provisions two HAPI FHIR services: Odisha on `http://localho
 1. Start Docker with `docker compose -f infrastructure/docker-compose.yml up -d`. On a brand-new PostgreSQL volume, `init-databases.sql` creates the Kolkata database automatically. If you already have the old `healthnet_pgdata` volume, create it once with `docker exec healthnet-postgres psql -U healthnet -d postgres -c "CREATE DATABASE hapi_fhir_kolkata_db OWNER healthnet;"`.
 2. Wait until both HAPI services are healthy, then run Alembic migrations.
 3. Start the backend and frontend.
-4. Run seed-single-repository-demo.py.
-4. Login as testpatient and show INOD000100 plus the current Odisha repository.
-5. Login as testdoctor, use Provider ID PRV-IN-000001, obtain patient consent, and request the longitudinal view.
-6. In Admin, create a migration from IN-OD-FHIR to IN-WB-KOL-FHIR.
-7. Login as testpatient and authorize the repository move.
-8. Return to Admin and complete the validated migration.
-9. The current Record Locator now points to Kolkata while the Health ID remains INOD000100.
+4. Run `scripts/seed-single-repository-demo.py`.
+5. Login as `testpatient` and show Health ID `INOD000100` plus the current Odisha repository.
+6. Login as `testdoctor`, note Provider ID `PRV-IN-000001`, and confirm the patient is not visible before consent.
+7. Login as `testpatient`, grant the doctor clinical consent, then return to the Doctor Portal and open the longitudinal record.
+8. Return to the Patient Portal and click **Revoke access**. Refresh the Doctor Portal and show that the patient is no longer authorized; a direct longitudinal-view request should be denied.
+9. In Admin, create a migration from `IN-OD-FHIR` to `IN-WB-KOL-FHIR`.
+10. Login as `testpatient` and authorize the repository move.
+11. Return to Admin, issue the one-time token and complete the validated migration.
+12. Show that the current Record Locator now points to Kolkata while the Health ID remains `INOD000100`. The destination data is in the separate Kolkata HAPI/PostgreSQL database.
 
 ## Core rule
 
