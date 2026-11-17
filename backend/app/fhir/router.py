@@ -166,7 +166,12 @@ async def submit_patient_record(
                 given_names = given if isinstance(given, list) else [str(given)]
                 name.setdefault("text", " ".join([*given_names, name.get("family", "")]).strip())
 
-    resource_id = payload.get("id") or (health_id if resource_type == "Patient" else str(uuid4()))
+    if resource_type != "Patient" and not payload.get("id"):
+        raise HTTPException(
+            status_code=422,
+            detail="Clinical resources must include a stable resource id for immutable, idempotent submission",
+        )
+    resource_id = payload.get("id") or health_id
     payload["id"] = resource_id
     client = FHIRClient(locator.endpoint or repository.base_url)
 
