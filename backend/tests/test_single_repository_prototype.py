@@ -75,3 +75,9 @@ def test_clinical_records_allow_identical_retries_but_reject_edits() -> None:
     corrected = {**retry, "valueQuantity": {"value": 130, "unit": "mmHg"}}
     assert clinical_payload_matches(original, retry)
     assert not clinical_payload_matches(original, corrected)
+
+
+def test_patient_aadhaar_self_service_routes_are_registered() -> None:
+    paths = app.openapi()["paths"]
+    assert "get" in paths["/api/v1/identity/me/aadhaar"]
+    assert "put" in paths["/api/v1/identity/me/aadhaar"]
