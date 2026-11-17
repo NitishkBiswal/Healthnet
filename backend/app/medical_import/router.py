@@ -85,7 +85,8 @@ def _make_resource(row: dict[str, Any], health_id: str, source_hospital: str) ->
             raise ValueError("recorded_at must be an ISO date or datetime") from exc
     coding = {"text": display}
     if code:
-        coding["coding"] = [{"system": str(row.get("code_system") or "http://snomed.info/sct"), "code": code, "display": display}]
+        default_system = "http://loinc.org" if kind == "OBSERVATION" else "http://snomed.info/sct"
+        coding["coding"] = [{"system": str(row.get("code_system") or default_system), "code": code, "display": display}]
     if kind == "CONDITION":
         status = str(row.get("status") or "unknown").strip().lower()
         allowed = {"active", "recurrence", "relapse", "inactive", "remission", "resolved", "unknown"}
@@ -187,6 +188,19 @@ async def import_csv_excel(
             resource = _make_resource(row, health_id, source_hospital)
             resource_type = resource["resourceType"]
             client = FHIRClient(locator.endpoint or repository.base_url)
+            try:
+                await client.get_resource("Patient", health_id)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code != 404:
+                    raise
+                patient_resource = apply_abdm_profile({
+                    "resourceType": "Patient",
+                    "id": health_id,
+                    "identifier": [{"system": "urn:healthnet:health-id", "value": health_id, "type": {"text": "HealthNet Health ID"}}],
+                    "name": [{"text": f"{patient.given_name} {patient.family_name}", "family": patient.family_name, "given": [patient.given_name]}],
+                    "birthDate": str(patient.date_of_birth),
+                })
+                await client.put_resource("Patient", health_id, patient_resource)
             try:
                 existing = await client.get_resource(resource_type, resource["id"])
             except httpx.HTTPStatusError as exc:
