@@ -33,8 +33,11 @@ class PatientRegistrationRequest(BaseModel):
 
     @model_validator(mode="after")
     def prevent_plaintext_aadhaar_identifier(self) -> "PatientRegistrationRequest":
-        aadhaar_types = {"AADHAAR", "AADHAAR_NUMBER", "UIDAI_AADHAAR"}
-        if any(item.identifier_type.strip().upper() in aadhaar_types for item in self.identifiers):
+        if any(
+            any(token in item.identifier_type.strip().upper() for token in ("AADHAAR", "AADHAR", "UIDAI"))
+            or item.identifier_type.strip().upper() == "UID"
+            for item in self.identifiers
+        ):
             raise ValueError(
                 "Use the dedicated aadhaar_number field; Aadhaar must not be stored as a plaintext identifier"
             )
