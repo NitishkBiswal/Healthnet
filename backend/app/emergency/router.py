@@ -112,7 +112,7 @@ async def get_emergency_profile(
 async def invoke_break_glass(
     health_id: str,
     request: BreakGlassRequest,
-    user: dict = Depends(require_role(Role.PROVIDER)),
+    user: dict = Depends(require_provider),
     session: AsyncSession = Depends(get_db),
 ):
     await _active_provider(user, session)
