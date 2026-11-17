@@ -127,8 +127,9 @@ async def submit_patient_record(
             patient_resource = {
                 "resourceType": "Patient",
                 "id": health_id,
-                "identifier": [{"system": "urn:healthnet:health-id", "value": health_id}],
-                "name": [{"family": patient.family_name, "given": [patient.given_name]}],
+                "meta": {"profile": ["https://nrces.in/ndhm/fhir/r4/StructureDefinition/Patient"]},
+                "identifier": [{"system": "urn:healthnet:health-id", "value": health_id, "type": {"text": "HealthNet Health ID"}}],
+                "name": [{"text": f"{patient.given_name} {patient.family_name}", "family": patient.family_name, "given": [patient.given_name]}],
                 "birthDate": str(patient.date_of_birth),
             }
             try:
