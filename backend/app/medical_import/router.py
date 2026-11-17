@@ -7,7 +7,6 @@ is_chronic, emergency_relevant.
 import csv
 import hashlib
 import io
-import json
 from datetime import date, datetime
 from typing import Any
 
