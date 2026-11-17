@@ -19,6 +19,8 @@ class PatientRegistrationRequest(BaseModel):
     email: str | None = Field(default=None, max_length=320)
     address: str | None = None
     issuing_jurisdiction: str = Field(min_length=1, max_length=32)
+    # Format-only check. HealthNet does not call UIDAI or claim Aadhaar verification.
+    aadhaar_number: str | None = Field(default=None, pattern=r"^\d{12}$")
     identifiers: list[PatientIdentifierInput] = Field(default_factory=list)
 
 
