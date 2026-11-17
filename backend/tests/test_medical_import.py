@@ -1,5 +1,9 @@
+from datetime import UTC, datetime
+from uuid import uuid4
+
 import pytest
 
+from app.audit.schemas import AuditEventResponse, AuditEventType
 from app.medical_import.router import _make_resource, _merge_resource_types, _rows_from_upload
 from app.main import app
 
@@ -62,3 +66,24 @@ def test_import_and_auditor_routes_are_registered() -> None:
 def test_imported_resource_types_are_added_without_losing_existing_types() -> None:
     assert _merge_resource_types("Patient,Observation", {"Condition", "Observation"}) == "Condition,Observation,Patient"
     assert _merge_resource_types(None, {"Condition", "Observation"}) == "Condition,Observation"
+
+
+def test_audit_event_response_includes_timestamp() -> None:
+    event = AuditEventResponse(
+        id=uuid4(),
+        event_type=AuditEventType.ACCESS,
+        health_id="INOD000100",
+        actor_id="auditor-subject",
+        action="MEDICAL_RECORD_IMPORTED",
+        payload={},
+        prev_event_hash=None,
+        event_hash="a" * 64,
+        created_at=datetime.now(UTC),
+    )
+    assert event.created_at.tzinfo is not None
+
+
+def test_emergency_and_longitudinal_routes_are_registered() -> None:
+    paths = app.openapi()["paths"]
+    assert "get" in paths["/api/v1/emergency/patients/{health_id}/emergency-profile"]
+    assert "post" in paths["/api/v1/emergency/patients/{health_id}/break-glass"]
