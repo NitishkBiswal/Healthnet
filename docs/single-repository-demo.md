@@ -91,3 +91,27 @@ One Health ID, one current authoritative repository, controlled migration when c
 For a convincing multi-repository demonstration, run one FHIR server per repository, each backed by its own PostgreSQL database (for example, Odisha HAPI -> `hapi_odisha_db`, Kolkata HAPI -> `hapi_kolkata_db`). The central HealthNet database stores identities, consent, custody history and the active Record Locator; it should not store the clinical payloads. Configure each repository's `base_url` to its own HAPI endpoint. During transfer, HealthNet exports FHIR resources from the source, imports them idempotently into the destination, reads them back and verifies the content hash before switching the active locator. Keep the source read-only for a defined retention period and preserve provenance/audit history.
 
 Do not copy PostgreSQL data directories or raw HAPI database tables between repositories: that couples repositories to HAPI/PostgreSQL internals and risks inconsistent indexes, references and server metadata. Use FHIR resource export/import for the clinical data plane. For a small classroom demo, separate databases on one PostgreSQL container are acceptable; for stronger isolation, use separate PostgreSQL instances as well. The current default seed still uses one shared HAPI endpoint and must be described as a logical/in-place transfer, not a physical cross-database copy.
+
+
+## Indian EHR Standards and ABDM alignment
+
+HealthNet's interoperability target is the Ministry of Health and Family Welfare's **EHR Standards for India (2016)** together with the **NRCeS ABDM FHIR Implementation Guide v6.5.0**, based on HL7 FHIR R4. The guide defines Indian-context profiles for Patient, Encounter, Condition, Observation, DiagnosticReport, MedicationRequest, DocumentReference, Composition-based clinical documents and DocumentBundle.
+
+Implementation choices in this prototype:
+
+- **Patient identity:** HealthNet Health ID remains the application's stable internal identifier. The optional Aadhaar number is stored separately in the identity vault, encrypted at application level; only a last-four hint is retained alongside ciphertext. Registration performs only a 12-digit format check. There is no UIDAI verification, OTP, biometric, eKYC, or claim that the Aadhaar belongs to the patient. Aadhaar is not emitted in provider-facing API responses or copied into clinical FHIR resources.
+- **Aadhaar vs ABHA:** Aadhaar is a government identity identifier; ABHA is a distinct digital health identifier under ABDM. This prototype does not create, verify, or claim an ABHA number. A future ABHA field/integration must remain separate.
+- **FHIR exchange:** Clinical resources use FHIR R4 and the canonical ABDM Patient profile is attached to HealthNet-created canonical Patient resources. Clinical artifacts should use the corresponding ABDM profiles (for example Condition, Encounter, Observation, DiagnosticReportLab/Imaging, MedicationRequest and DocumentReference). For exchangeable clinical documents, use ABDM Composition profiles and DocumentBundle rather than sending isolated unstructured objects.
+- **Terminology:** Use SNOMED CT for clinical concepts, LOINC for laboratory tests and measurements, and applicable WHO ICD classification for reporting. Preserve coding system, code, display, units and reference links; do not rely on free-text labels alone.
+- **Consent and audit:** Existing consent checks gate provider access and revocation blocks subsequent requests. Access and migration operations are recorded with provenance/audit information. ABDM's HIU/HIP consent-mediated exchange model is the target design.
+- **Privacy:** Aadhaar is deliberately kept out of clinical repositories. Configure a dedicated AADHAAR_ENCRYPTION_KEY secret in each backend environment; the local SECRET_KEY fallback exists only to keep development setup runnable. Keep the key outside source control and rotate it with a planned re-encryption procedure.
+
+### Conformance boundary
+
+This is an **ABDM-aligned prototype**, not an ABDM-certified or sandbox-integrated application. Merely tagging a FHIR resource with a profile URL does not prove conformance. Before claiming full compliance, validate every exchanged resource/document against the selected NRCeS package and terminology value sets, implement the ABDM HIP/HIU and consent-manager gateway workflows, complete sandbox onboarding and required security assessment, and verify applicable privacy/legal obligations. The ABDM guide itself describes FHIR R4 as its base and defines minimum conformance requirements; the MoHFW EHR Standards provide broader recommendations for identifiers, clinical terminologies, exchange and security.
+
+Official references:
+- MoHFW, EHR Standards for India: https://www.mohfw.gov.in/sites/default/files/EMR-EHR_Standards_for_India_as_notified_by_MOHFW_2016_0.pdf
+- NRCeS, EHR Standards for India: https://www.nrces.in/standards/ehr-standards-for-india
+- NRCeS, ABDM FHIR R4 Implementation Guide v6.5.0: https://nrces.in/ndhm/fhir/r4/
+- ABDM HIP/HIU guidelines: https://abdm.gov.in/strapicms/uploads/HIP_HIU_Guidelines_f85df336ec.pdf
