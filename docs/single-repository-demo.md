@@ -38,6 +38,10 @@ For this prototype, the FHIR Patient resource uses the Health ID as its FHIR res
 
 Patient registration now selects an online/degraded repository, preferring the issuing jurisdiction, and creates the active Record Locator and custody history in the same database transaction. Registration returns a clear service-unavailable error if no repository is available.
 
+## Patient consent and revocation
+
+The Patient Portal lists consent grants with provider ID, purpose, scopes, expiry and current status. Patients can revoke an active grant from the same screen. The authenticated DELETE endpoint verifies that the caller owns the Health ID attached to the consent, marks the grant REVOKED with a server-side timestamp, and commits the change. Longitudinal access checks query only ACTIVE, currently valid consent on every request, so a revoked grant stops authorizing subsequent access. Revocation does not erase clinical records or historical audit information.
+
 ## Migration model
 
 A repository move is a controlled custody migration:
@@ -77,3 +81,10 @@ The local demo intentionally uses the same HAPI FHIR endpoint for both logical r
 ## Core rule
 
 One Health ID, one current authoritative repository, controlled migration when custody changes.
+
+
+## Recommended physical repository deployment
+
+For a convincing multi-repository demonstration, run one FHIR server per repository, each backed by its own PostgreSQL database (for example, Odisha HAPI -> `hapi_odisha_db`, Kolkata HAPI -> `hapi_kolkata_db`). The central HealthNet database stores identities, consent, custody history and the active Record Locator; it should not store the clinical payloads. Configure each repository's `base_url` to its own HAPI endpoint. During transfer, HealthNet exports FHIR resources from the source, imports them idempotently into the destination, reads them back and verifies the content hash before switching the active locator. Keep the source read-only for a defined retention period and preserve provenance/audit history.
+
+Do not copy PostgreSQL data directories or raw HAPI database tables between repositories: that couples repositories to HAPI/PostgreSQL internals and risks inconsistent indexes, references and server metadata. Use FHIR resource export/import for the clinical data plane. For a small classroom demo, separate databases on one PostgreSQL container are acceptable; for stronger isolation, use separate PostgreSQL instances as well. The current default seed still uses one shared HAPI endpoint and must be described as a logical/in-place transfer, not a physical cross-database copy.
