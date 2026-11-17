@@ -89,7 +89,7 @@ function RecordCard({ record }: { record: LongitudinalRecord }) {
 
   let title = type;
   let summary = "";
-  let date = getDisplayValue(resource, ["recordedDate"]) ?? getDisplayValue(resource, ["effectiveDateTime"]);
+  let date = getDisplayValue(resource, ["recordedDate"]) ?? getDisplayValue(resource, ["effectiveDateTime"]) ?? getDisplayValue(resource, ["effectivePeriod", "start"]) ?? getDisplayValue(resource, ["period", "start"]) ?? getDisplayValue(resource, ["onsetDateTime"]) ?? getDisplayValue(resource, ["issued"]) ?? getDisplayValue(resource, ["authoredOn"]);
 
   if (type === "Encounter") {
     title = "Clinical Visit";
