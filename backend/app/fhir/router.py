@@ -20,6 +20,35 @@ from app.security.rbac import Role
 
 router = APIRouter(tags=["FHIR"])
 
+ABDM_PROFILE_BASE = "https://nrces.in/ndhm/fhir/r4/StructureDefinition/"
+ABDM_RESOURCE_PROFILES = {
+    "Patient": "Patient",
+    "Encounter": "Encounter",
+    "Condition": "Condition",
+    "Observation": "Observation",
+    "MedicationRequest": "MedicationRequest",
+    "DocumentReference": "DocumentReference",
+    "Procedure": "Procedure",
+    "Immunization": "Immunization",
+    "AllergyIntolerance": "AllergyIntolerance",
+    "CarePlan": "CarePlan",
+    "ServiceRequest": "ServiceRequest",
+    "MedicationStatement": "MedicationStatement",
+}
+
+
+def apply_abdm_profile(payload: dict) -> dict:
+    """Attach the applicable ABDM R4 profile declaration for supported resource types."""
+    resource_type = payload.get("resourceType")
+    profile_name = ABDM_RESOURCE_PROFILES.get(resource_type)
+    if profile_name:
+        meta = payload.setdefault("meta", {})
+        profiles = meta.setdefault("profile", [])
+        canonical = ABDM_PROFILE_BASE + profile_name
+        if canonical not in profiles:
+            profiles.append(canonical)
+    return payload
+
 
 def _is_admin_or_system(user: dict) -> bool:
     roles = set(user.get("roles", []))
@@ -112,6 +141,14 @@ async def submit_patient_record(
                 status_code=422,
                 detail=f"Clinical resource must reference Patient/{health_id}",
             )
+
+    payload = apply_abdm_profile(payload)
+    if resource_type == "Patient":
+        for identifier in payload.get("identifier", []):
+            if identifier.get("system") == "urn:healthnet:health-id" and identifier.get("value") == health_id:
+                identifier.setdefault("type", {"text": "HealthNet Health ID"})
+        for name in payload.get("name", []):
+            name.setdefault("text", " ".join([*name.get("given", []), name.get("family", "")]).strip())
 
     resource_id = payload.get("id") or (health_id if resource_type == "Patient" else str(uuid4()))
     payload["id"] = resource_id
