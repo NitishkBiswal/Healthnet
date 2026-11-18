@@ -44,17 +44,17 @@ The Patient Portal lists consent grants with provider ID, purpose, scopes, expir
 
 ## Migration model
 
-A repository move is a controlled custody migration:
+A repository move is a patient-directed, controlled custody migration:
 
-1. Admin creates a migration request from the patient's current repository to the destination.
-2. The patient authorizes the request.
-3. Admin issues the transfer authorization token.
-4. The migration control plane records validation, hashing, transfer and destination validation.
-5. Source custody becomes inactive/read-only.
-6. The destination becomes the patient's single ACTIVE Record Locator.
-7. Historical EHR custody remains auditable.
+1. The patient opens **Transfer repository** in the Patient Portal, chooses an available destination and supplies a reason (minimum 10 characters).
+2. HealthNet records the current repository as the source and the selected repository as the destination. The patient reviews and explicitly authorizes the request.
+3. After two successful transfers for the same Health ID, every subsequent transfer is placed in **PENDING_AUDITOR_REVIEW** after patient authorization. An Auditor must approve it; rejection prevents execution.
+4. An Admin sees patient-authorized requests in the transfer queue and runs the verified transfer.
+5. HealthNet exports the patient's FHIR resources from the current source, imports them into the destination, reads them back and verifies the package hash.
+6. Only after successful verification does HealthNet deactivate the old Record Locator and activate the destination locator. The permanent Health ID remains unchanged.
+7. The old repository's custody period is closed and retained in history; the previous clinical copy is retained for audit/retention, not automatically deleted.
 
-HealthNet stores locator/custody metadata; clinical FHIR payloads remain in repositories.
+The same transfer service supports repeated moves (for example Odisha -> Karnataka -> West Bengal). Each new move uses the then-current ACTIVE Record Locator as its source. HealthNet stores locator/custody metadata; clinical FHIR payloads remain in repositories. The application's normal record access and ingestion paths resolve only the ACTIVE locator. The old HAPI endpoint is not independently made read-only by this classroom prototype, so direct access to an old endpoint must be treated as an infrastructure/admin-only operation.
 
 ## Demo data
 
@@ -62,24 +62,23 @@ Run from the repository root after Docker, migrations and Keycloak are running:
 
     .\\backend\\.venv\\Scripts\\python.exe .\\scripts\\seed-single-repository-demo.py
 
-The seed creates Health ID INOD000100 for Aarav Sharma, Odisha as the current repository, demo Provider ID PRV-IN-000001, and Patient/Encounter/Condition/Observation/MedicationRequest FHIR data. Kolkata is also registered as a logical migration destination.
+The seed creates Health ID INOD000100 for Aarav Sharma, Odisha as the current repository, demo Provider ID PRV-IN-000001, and Patient/Encounter/Condition/Observation/MedicationRequest FHIR data. Kolkata and Karnataka are registered as independent migration destinations.
 
-The Docker demo now provisions two HAPI FHIR services: Odisha on `http://localhost:8090/fhir` and Kolkata on `http://localhost:8091/fhir`. Each uses its own PostgreSQL database (`hapi_fhir_db` and `hapi_fhir_kolkata_db`). The seed script assigns the Kolkata endpoint as the destination. Migration therefore performs a real cross-HAPI, cross-database FHIR export/import, destination read-back and hash verification. If the backend itself runs inside Docker, set `KOLKATA_HAPI_FHIR_BASE_URL=http://hapi-fhir-kolkata:8080/fhir` when seeding; the default assumes the backend/seed script runs on the host.
+The Docker demo provisions three HAPI FHIR services: Odisha on `http://localhost:8090/fhir`, Kolkata on `http://localhost:8091/fhir`, and Karnataka on `http://localhost:8092/fhir`. Each uses its own PostgreSQL database (`hapi_fhir_db`, `hapi_fhir_kolkata_db`, and `hapi_fhir_karnataka_db`). The compose file includes an idempotent Karnataka database initializer so an existing PostgreSQL volume is supported. The seed script registers all three repositories. Migration therefore performs a real cross-HAPI, cross-database FHIR export/import, destination read-back and hash verification. If the backend itself runs inside Docker, set `KOLKATA_HAPI_FHIR_BASE_URL` and `KARNATAKA_HAPI_FHIR_BASE_URL` to the corresponding Compose service URLs; the defaults assume the backend/seed script runs on the host.
 
 ## Demo walkthrough
 
-1. Start Docker with `docker compose -f infrastructure/docker-compose.yml up -d`. On a brand-new PostgreSQL volume, `init-databases.sql` creates the Kolkata database automatically. If you already have the old `healthnet_pgdata` volume, create it once with `docker exec healthnet-postgres psql -U healthnet -d postgres -c "CREATE DATABASE hapi_fhir_kolkata_db OWNER healthnet;"`.
+1. Start Docker with `docker compose -f infrastructure/docker-compose.yml up -d`. The Compose `karnataka-db-init` service creates the Karnataka FHIR database even when you already have an existing PostgreSQL volume; `init-databases.sql` creates all FHIR databases on a fresh volume.
 2. Wait until both HAPI services are healthy, then run Alembic migrations.
 3. Start the backend and frontend.
 4. Run `scripts/seed-single-repository-demo.py`.
-5. Login as `testpatient`, show Health ID `INOD000100` and the current Odisha repository. In **Additional identity identifier**, enter a synthetic 12-digit test value (never a real Aadhaar number), save it, and show only the masked last four digits.
+5. Login as `testpatient`, show Health ID `INOD000100` and the current Odisha repository. Open **Transfer repository**, choose Karnataka, enter a clear reason (for example, permanent relocation), submit the request and authorize it.
 6. Login as `testdoctor`, note Provider ID `PRV-IN-000001`, and confirm the patient is not visible before consent.
 7. Login as `testpatient`, grant the doctor clinical consent, then return to the Doctor Portal and open the longitudinal record.
 8. Return to the Patient Portal and click **Revoke access**. Refresh the Doctor Portal and show that the patient is no longer authorized; a direct longitudinal-view request should be denied.
-9. In Admin, create a migration from `IN-OD-FHIR` to `IN-WB-KOL-FHIR`.
-10. Login as `testpatient` and authorize the repository move.
-11. Return to Admin, issue the one-time token and complete the validated migration.
-12. Show that the current Record Locator now points to Kolkata while the Health ID remains `INOD000100`. The destination data is in the separate Kolkata HAPI/PostgreSQL database.
+9. In Admin, refresh the **Patient-initiated repository transfer queue**. Run the verified transfer after patient authorization.
+10. Show the manifest resource count and `VALID` destination verification. Confirm the current Record Locator now points to Karnataka while Health ID remains `INOD000100`; the destination resources are in the separate Karnataka HAPI/PostgreSQL database.
+11. For a second transfer, move Karnataka -> Kolkata. After two completed moves, request another transfer: after patient authorization it must appear in the Auditor Portal. Approve or reject it as Auditor before Admin can execute it.
 
 ## Core rule
 
