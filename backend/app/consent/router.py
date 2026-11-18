@@ -175,7 +175,7 @@ async def check_consent(
     return {"allowed": allowed}
 
 
-@router.post("/provider-notices/{consent_id}/dismiss", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/provider-notices/{consent_id}/dismiss")
 async def dismiss_provider_notice(
     consent_id: UUID,
     user: dict = Depends(require_provider),
@@ -204,3 +204,4 @@ async def dismiss_provider_notice(
     if existing is None:
         session.add(ProviderNoticeDismissal(consent_id=consent_id, provider_subject=subject))
         await session.commit()
+    return {"dismissed": True}
