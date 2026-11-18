@@ -145,6 +145,14 @@ export default function PatientPortal() {
       )}
 
       {patient && (
+        <nav aria-label="Patient portal tabs" className="mb-5 grid grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+          <button type="button" role="tab" aria-selected={activeTab === "profile"} onClick={() => setActiveTab("profile")} className={activeTab === "profile" ? "rounded-lg bg-slate-900 px-2 py-3 text-sm font-semibold text-white" : "rounded-lg px-2 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"}>Profile</button>
+          <button type="button" role="tab" aria-selected={activeTab === "consents"} onClick={() => setActiveTab("consents")} className={activeTab === "consents" ? "rounded-lg bg-slate-900 px-2 py-3 text-sm font-semibold text-white" : "rounded-lg px-2 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"}>Grant & revoke consents</button>
+          <button type="button" role="tab" aria-selected={activeTab === "records"} onClick={() => setActiveTab("records")} className={activeTab === "records" ? "rounded-lg bg-slate-900 px-2 py-3 text-sm font-semibold text-white" : "rounded-lg px-2 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"}>Medical records</button>
+        </nav>
+      )}
+
+      {patient && activeTab === "profile" && (
         <Card title="Additional identity identifier">
           <div className="space-y-3">
             <p className="text-sm text-slate-700">Aadhaar is optional. It is encrypted in the identity database, and only you can manage it here. It is not sent to doctors or included in clinical FHIR records.</p>
@@ -159,7 +167,7 @@ export default function PatientPortal() {
         </Card>
       )}
 
-      {patient && (
+      {patient && activeTab === "records" && (
         <Card title="My Medical Records">
           <div className="space-y-4">
             {recordsLoading && <p className="text-sm text-slate-600">Loading your records from your current repository…</p>}
