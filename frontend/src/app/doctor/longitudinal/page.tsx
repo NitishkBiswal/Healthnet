@@ -150,6 +150,8 @@ function DoctorLongitudinalViewContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const healthId = searchParams.get("health_id") ?? "";
+  const requestedPurpose = searchParams.get("purpose") ?? "TREATMENT";
+  const requestedScope = searchParams.get("scope") ?? "clinical";
   const [principal, setPrincipal] = useState<Principal | null>(null);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [location, setLocation] = useState<CurrentRecordLocation | null>(null);
@@ -165,40 +167,65 @@ function DoctorLongitudinalViewContent() {
   );
 
   useEffect(() => {
+    let cancelled = false;
     if (!healthId) {
       setError("No patient was selected.");
       return;
     }
 
     async function load() {
+      setError("");
+      setEmergency(null);
+      setEmergencyError("");
+      setView(null);
       try {
-        const [principalData, authorizedData, patientData, locationData, longitudinalData] = await Promise.all([
+        // Resolve the patient's actual active consent before requesting any clinical data.
+        const [principalData, authorizedData] = await Promise.all([
           api.currentPrincipal(),
           api.authorizedPatients(),
-          api.patient(healthId),
-          api.currentRecordLocation(healthId),
-          api.longitudinal(healthId, patientSummary?.purpose ?? "TREATMENT", patientSummary?.scopes?.[0] ?? "clinical"),
         ]);
+        if (cancelled) return;
         setPrincipal(principalData);
         setAuthorized(authorizedData);
+
+        const consent = authorizedData.find((item) =>
+          item.health_id === healthId &&
+          item.purpose === requestedPurpose &&
+          item.scopes.includes(requestedScope)
+        );
+        if (!consent) {
+          throw new Error("This patient has not granted your account active consent for the selected purpose and scope. Return to the Doctor Dashboard and select the patient again.");
+        }
+
+        const [patientData, locationData, longitudinalData] = await Promise.all([
+          api.patient(healthId),
+          api.currentRecordLocation(healthId),
+          api.longitudinal(healthId, consent.purpose, requestedScope),
+        ]);
+        if (cancelled) return;
         setPatient(patientData);
         setLocation(locationData);
         setView(longitudinalData as LongitudinalResponse);
+
         try {
-          const emergencyData = await api.emergency(healthId, patientSummary?.purpose ?? "TREATMENT", patientSummary?.scopes?.[0] ?? "clinical");
+          const emergencyData = await api.emergency(healthId, consent.purpose, requestedScope);
+          if (cancelled) return;
           setEmergency(emergencyData);
           setEmergencyError("");
         } catch (emergencyReason: unknown) {
+          if (cancelled) return;
           setEmergency(null);
           setEmergencyError(emergencyReason instanceof Error ? emergencyReason.message : "Emergency details are not available under the current authorization.");
         }
       } catch (reason: unknown) {
+        if (cancelled) return;
         setError(reason instanceof Error ? reason.message : "Unable to load the patient's longitudinal record");
       }
     }
 
     void load();
-  }, [healthId, patientSummary?.purpose, patientSummary?.scopes]);
+    return () => { cancelled = true; };
+  }, [healthId, requestedPurpose, requestedScope]);
 
   const records = useMemo(() => [...(view?.records ?? [])].sort((a, b) => {
     const aDate = getRecordDate(a.resource ?? {});
