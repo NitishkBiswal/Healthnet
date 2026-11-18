@@ -85,6 +85,20 @@ class MigrationService:
         )
         self.session.add(item)
         await self.session.flush()
+        await AuditService(self.session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.MIGRATION,
+                health_id=item.health_id,
+                actor_id=actor_id,
+                action="REPOSITORY_MIGRATION_REQUESTED",
+                payload={
+                    "source_repository_id": str(source.id),
+                    "destination_repository_id": str(destination.id),
+                    "reason": item.reason,
+                    "review_required": item.review_required,
+                },
+            )
+        )
         await self.session.refresh(item)
         return item
 
@@ -423,6 +437,8 @@ class MigrationService:
                     "destination_repository": destination.code,
                     "resource_count": len(exported),
                     "package_hash": package_hash,
+                    "reason": item.reason,
+                    "auditor_review_status": item.review_status,
                 },
             )
         )
