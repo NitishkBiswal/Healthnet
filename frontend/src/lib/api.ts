@@ -97,6 +97,7 @@ export const api = {
 
   patient: (healthId: string) => request<Patient>("/identity/" + encodeURIComponent(healthId)),
   myPatient: () => request<Patient>("/identity/me"),
+  updateMyProfile: (body: Pick<Patient, "given_name" | "family_name" | "date_of_birth" | "sex" | "phone" | "email" | "address">) => request<Patient>("/identity/me/profile", { method: "PUT", body: JSON.stringify(body) }),
   myAadhaarStatus: () => request<AadhaarStatus>("/identity/me/aadhaar"),
   updateMyAadhaar: (aadhaar_number: string) => request<AadhaarStatus>("/identity/me/aadhaar", { method: "PUT", body: JSON.stringify({ aadhaar_number }) }),
   registerPatient: (body: PatientRegistration) => request<RegistrationResult>("/identity/register", { method: "POST", body: JSON.stringify(body) }),
