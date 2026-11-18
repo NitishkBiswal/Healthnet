@@ -18,6 +18,7 @@ from app.migration.models import (
 )
 from app.migration.schemas import MigrationState, PatientTransferCreate, TransferExecuteRequest, TransferRequestCreate, TransferStatus
 from app.record_locator.models import RecordLocator
+from app.consent.models import Consent
 from app.identity.models import PatientIdentity
 from app.provenance.schemas import ProvenanceRecord
 from app.provenance.service import ProvenanceService
@@ -485,6 +486,27 @@ class MigrationService:
             .values(status="INACTIVE")
         )
         finished_at = datetime.now(UTC)
+
+        # A repository move changes the patient's authoritative data location.
+        # Revoke prior provider grants so each doctor must receive fresh consent
+        # before accessing records at the destination repository.
+        await self.session.execute(
+            update(Consent)
+            .where(
+                Consent.health_id == item.health_id,
+                Consent.grantee_type == "PROVIDER",
+                Consent.status == "ACTIVE",
+            )
+            .values(
+                status="REVOKED",
+                revoked_at=finished_at,
+                reason=(
+                    f"REPOSITORY_CHANGED:{source.code}->{destination.code}. "
+                    "The patient must grant consent again after repository migration."
+                ),
+            )
+        )
+
         self.session.add(
             EHRCustody(
                 health_id=item.health_id,
