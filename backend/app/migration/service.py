@@ -15,7 +15,7 @@ from app.migration.models import (
     TransferManifest,
     TransferRequest,
 )
-from app.migration.schemas import MigrationState, TransferExecuteRequest, TransferRequestCreate
+from app.migration.schemas import MigrationState, PatientTransferCreate, TransferExecuteRequest, TransferRequestCreate
 from app.record_locator.models import RecordLocator
 from app.identity.models import PatientIdentity
 from app.provenance.schemas import ProvenanceRecord
