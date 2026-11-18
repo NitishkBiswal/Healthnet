@@ -15,6 +15,8 @@ export default function AdminPortal() {
   const [error, setError] = useState("");
   const [currentLocation, setCurrentLocation] = useState<CurrentRecordLocation | null>(null);
   const [transfer, setTransfer] = useState<Transfer | null>(null);
+  const [transferReason, setTransferReason] = useState("");
+  const [adminTransfers, setAdminTransfers] = useState<Transfer[]>([]);
   const [migrationMessage, setMigrationMessage] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<MedicalImportResult | null>(null);
@@ -29,6 +31,11 @@ export default function AdminPortal() {
   const [jurisdiction, setJurisdiction] = useState("IN-OD");
   const [providerMessage, setProviderMessage] = useState("");
 
+  async function loadAdminTransfers() {
+    try { setAdminTransfers(await api.adminTransfers()); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not load transfer queue"); }
+  }
+
   async function loadProviders() {
     try {
       setProviders(await api.providers());
@@ -42,6 +49,7 @@ export default function AdminPortal() {
       .then(setRepos)
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load repositories"));
     void loadProviders();
+    void loadAdminTransfers();
   }, []);
 
   useEffect(() => {
@@ -74,8 +82,10 @@ export default function AdminPortal() {
         destination_repository_id: destination,
         purpose: "MIGRATION",
         scope: "FHIR",
+        reason: transferReason.trim(),
       });
       setTransfer(created);
+      await loadAdminTransfers();
       setResult(created);
       setMigrationMessage("Migration request created. Patient authorization is required.");
     } catch (e) {
@@ -94,6 +104,29 @@ export default function AdminPortal() {
       setCurrentLocation(await api.currentRecordLocation(healthId.trim()));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not find the patient's current repository");
+    }
+  }
+
+  async function completeQueuedTransfer(item: Transfer) {
+    setError("");
+    setMigrationMessage("");
+    try {
+      const authorization = await api.issueTransferToken(item.id);
+      const completed = await api.executeTransfer(item.id, {
+        authorization_token: authorization.authorization_token,
+        resource_count: 0,
+      });
+      const latest = await api.transferStatus(item.id);
+      setAdminTransfers((items) => items.map((value) => value.id === latest.id ? latest : value));
+      if (healthId.trim() === item.health_id) {
+        setCurrentLocation(await api.currentRecordLocation(item.health_id));
+      }
+      setMigrationMessage(`Transfer for ${item.health_id} completed. Destination records were verified before custody changed.`);
+      setResult(completed);
+      await loadAdminTransfers();
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Transfer execution failed");
+      await loadAdminTransfers();
     }
   }
 
@@ -215,7 +248,10 @@ export default function AdminPortal() {
                 <option value="">Destination repository</option>
                 {repos.map((r) => <option key={r.id} value={r.id}>{r.code} — {r.name}</option>)}
               </select>
-              <button onClick={migrate} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">Request repository move</button>
+              <label className="block text-sm font-semibold text-slate-800">Reason for transfer
+                <textarea value={transferReason} onChange={(e) => setTransferReason(e.target.value)} rows={2} minLength={10} placeholder="Explain why this patient record needs to move to the destination repository." className="mt-1 w-full rounded-lg border-2 border-slate-300 px-3 py-2 font-normal" />
+              </label>
+              <button disabled={transferReason.trim().length < 10} onClick={migrate} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-50">Request repository move</button>
               {transfer && (
                 <div className="rounded-lg border border-cyan-300 bg-cyan-50 p-3 text-sm">
                   <p className="font-bold text-slate-950">Migration state: {transfer.state}</p>
@@ -258,6 +294,29 @@ export default function AdminPortal() {
       </div>
 
       <div className="mt-5">
+        <Card title="Patient-initiated repository transfer queue">
+          <p className="mb-3 text-sm text-slate-600">Transfers authorized by patients appear here. If Auditor review was triggered, the transfer cannot be executed until it is approved.</p>
+          {adminTransfers.length === 0 ? <p className="text-sm text-slate-600">No pending repository transfers.</p> : (
+            <div className="space-y-3">
+              {adminTransfers.map((item) => (
+                <div key={item.id} className="rounded-xl border border-slate-200 p-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-bold text-slate-950">{item.health_id}</p>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-800">{item.state.replaceAll("_", " ")}</span>
+                  </div>
+                  <p className="mt-1 text-slate-700">Reason: {item.reason}</p>
+                  {item.review_required && <p className="mt-1 font-semibold text-amber-800">Auditor review: {item.review_status}</p>}
+                  {item.state === "PENDING_AUDITOR_REVIEW" && <p className="mt-2 text-amber-800">Waiting for Auditor approval.</p>}
+                  {item.state === "PATIENT_AUTHORIZED" || item.state === "TRANSFER_AUTH_ISSUED" ? (
+                    <button type="button" onClick={() => void completeQueuedTransfer(item)} className="mt-3 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white">Run verified transfer</button>
+                  ) : null}
+                  {item.error_message && <p className="mt-2 text-red-700">{item.error_message}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+          {migrationMessage && <p className="mt-3 text-sm font-semibold text-slate-700">{migrationMessage}</p>}
+        </Card>
         <Card title="Import existing medical records (CSV / Excel)">
           <p className="text-sm text-slate-700">Admin-only import. Each row is matched to a HealthNet Health ID and routed to that patient's active repository. Supported record types: CONDITION and OBSERVATION.</p>
           <div className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs text-slate-700">
