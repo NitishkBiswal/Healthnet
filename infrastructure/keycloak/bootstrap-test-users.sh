@@ -14,7 +14,7 @@ until /opt/keycloak/bin/kcadm.sh get realms/healthnet >/dev/null 2>&1; do
   sleep 3
 done
 
-/opt/keycloak/bin/kcadm.sh update realms/healthnet -s registrationAllowed=true
+/opt/keycloak/bin/kcadm.sh update realms/healthnet -s registrationAllowed=true -s loginTheme=healthnet
 
 # Make every self-registered account a patient by default.
 if /opt/keycloak/bin/kcadm.sh get roles/default-roles-healthnet -r healthnet >/dev/null 2>&1; then
