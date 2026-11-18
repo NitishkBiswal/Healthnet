@@ -67,6 +67,7 @@ class TransferStatus(BaseModel):
     reason: str
     review_required: bool = False
     review_status: str = "NOT_REQUIRED"
+    completed_transfer_count: int = 0
     reviewed_by: str | None = None
     reviewed_at: datetime | None = None
     reviewer_note: str | None = None
