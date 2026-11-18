@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type AuditEvent, type DuplicateReview } from "@/lib/api";
+import { api, type AuditEvent, type DuplicateReview, type Transfer } from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
 export default function AuditorPortal() {
@@ -10,6 +10,7 @@ export default function AuditorPortal() {
   const [events, setEvents] = useState<unknown>(null);
   const [integrity, setIntegrity] = useState<unknown>(null);
   const [reviews, setReviews] = useState<DuplicateReview[]>([]);
+  const [transferReviews, setTransferReviews] = useState<Transfer[]>([]);
   const [importAudits, setImportAudits] = useState<AuditEvent[]>([]);
   const [error, setError] = useState("");
 
@@ -21,8 +22,27 @@ export default function AuditorPortal() {
     }
   }
 
+  async function loadTransferReviews() {
+    try {
+      setTransferReviews(await api.auditorTransferReviews());
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Could not load repository transfer reviews");
+    }
+  }
+
+  async function decideTransfer(id: string, decision: "APPROVE" | "REJECT") {
+    setError("");
+    try {
+      await api.reviewTransfer(id, decision, decision === "APPROVE" ? "Transfer reason and history reviewed; approved for migration." : "Transfer rejected after Auditor review.");
+      await loadTransferReviews();
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Could not update transfer review");
+    }
+  }
+
   useEffect(() => {
     void loadReviews();
+    void loadTransferReviews();
     api.importedRecordAudits().then(setImportAudits).catch((reason) => setError(reason instanceof Error ? reason.message : "Could not load import audit events"));
   }, []);
 
@@ -87,6 +107,30 @@ export default function AuditorPortal() {
                       </>}
                     </div>
                   )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card title="Repository transfer reviews">
+          <p className="mb-3 text-sm text-slate-600">Transfers beyond the normal patient transfer allowance require an independent Auditor decision. Review the patient's reason and previous completed transfer count before approval.</p>
+          {transferReviews.length === 0 ? <p className="text-sm text-slate-600">No repository transfers are waiting for Auditor review.</p> : (
+            <div className="space-y-3">
+              {transferReviews.map((transfer) => (
+                <div key={transfer.id} className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-bold text-slate-950">Health ID: {transfer.health_id}</p>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-amber-900">PENDING REVIEW</span>
+                  </div>
+                  <p className="mt-2 text-slate-800"><strong>Reason:</strong> {transfer.reason}</p>
+                  <p className="mt-1 text-slate-700"><strong>Completed previous transfers:</strong> {transfer.completed_transfer_count}</p>
+                  <p className="mt-1 break-all text-xs text-slate-500">Transfer ID: {transfer.id}</p>
+                  <p className="mt-1 text-xs text-slate-500">Submitted: {new Date(transfer.created_at).toLocaleString()}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => void decideTransfer(transfer.id, "APPROVE")} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Approve transfer</button>
+                    <button type="button" onClick={() => void decideTransfer(transfer.id, "REJECT")} className="rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-700">Reject transfer</button>
+                  </div>
                 </div>
               ))}
             </div>
