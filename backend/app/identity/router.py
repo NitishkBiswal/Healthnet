@@ -98,7 +98,16 @@ async def list_duplicate_reviews(
     result = await session.execute(
         select(DuplicateReview).order_by(DuplicateReview.created_at.desc())
     )
-    return list(result.scalars().all())
+    reviews = list(result.scalars().all())
+    responses: list[DuplicateReviewResponse] = []
+    for review in reviews:
+        response = DuplicateReviewResponse.model_validate(review).model_dump()
+        candidate = await session.get(PatientIdentity, review.candidate_patient_id)
+        target = await session.get(PatientIdentity, review.target_patient_id) if review.target_patient_id else None
+        response["candidate_health_id"] = candidate.display_health_id if candidate else None
+        response["target_health_id"] = target.display_health_id if target else None
+        responses.append(DuplicateReviewResponse.model_validate(response))
+    return responses
 
 
 @router.get("/duplicate-reviews/mine", response_model=list[DuplicateReviewResponse])
