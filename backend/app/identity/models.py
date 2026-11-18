@@ -93,7 +93,7 @@ class DuplicateReview(Base):
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     review_type: Mapped[str] = mapped_column(String(32), default="DUPLICATE_REGISTRATION")
     target_patient_id: Mapped[UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("healthnet.patient_identity.id"), nullable=True, index=True
+        Uuid(as_uuid=True), ForeignKey("healthnet.patient_identity.id", name="fk_duplicate_review_target_patient"), nullable=True, index=True
     )
     proposed_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     candidate_patient_id: Mapped[UUID] = mapped_column(
