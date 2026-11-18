@@ -550,14 +550,8 @@ class MigrationService:
     async def admin_transfers(self) -> list[TransferRequest]:
         result = await self.session.scalars(
             select(TransferRequest)
-            .where(
-                TransferRequest.state.not_in([
-                    MigrationState.COMPLETED.value,
-                    MigrationState.REJECTED.value,
-                ])
-            )
             .order_by(TransferRequest.created_at.desc())
-            .limit(100)
+            .limit(200)
         )
         return list(result.all())
 
