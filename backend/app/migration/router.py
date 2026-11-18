@@ -16,6 +16,7 @@ from app.migration.schemas import (
 from app.migration.service import MigrationService
 from app.security.dependencies import get_current_user
 from app.security.rbac import Role
+from app.repository.schemas import RepositoryInfo
 
 router = APIRouter(tags=["Migration"])
 
@@ -80,6 +81,28 @@ async def create_my_transfer(
     except ValueError as exc:
         await session.rollback()
         raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/transfer-destinations", response_model=list[RepositoryInfo])
+async def transfer_destinations(
+    user: dict = Depends(require_patient),
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        items = await MigrationService(session).transfer_destinations(
+            str(user.get("sub", "unknown"))
+        )
+        return [RepositoryInfo.model_validate(item) for item in items]
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/admin/transfers", response_model=list[TransferStatus])
+async def admin_transfers(
+    _: dict = Depends(require_admin_or_system),
+    session: AsyncSession = Depends(get_db),
+):
+    return await MigrationService(session).admin_transfers()
 
 
 @router.get("/auditor/reviews", response_model=list[TransferStatus])
