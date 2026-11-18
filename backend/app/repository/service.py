@@ -4,6 +4,9 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import func, distinct
+
+from app.record_locator.models import RecordLocator
 from app.repository.models import EHRCustody, Repository
 from app.repository.schemas import CustodyCreate, RepositoryCreate, RepositoryStatus
 
@@ -36,6 +39,35 @@ class RepositoryService:
     async def list_repositories(self) -> list[Repository]:
         result = await self.session.execute(select(Repository).order_by(Repository.code))
         return list(result.scalars())
+
+    async def list_repository_summaries(self) -> list[dict]:
+        result = await self.session.execute(
+            select(
+                Repository,
+                func.count(distinct(RecordLocator.health_id)).label("active_patient_count"),
+            )
+            .outerjoin(
+                RecordLocator,
+                (RecordLocator.repository_id == Repository.id)
+                & (RecordLocator.status == "ACTIVE"),
+            )
+            .group_by(Repository.id)
+            .order_by(Repository.code)
+        )
+        return [
+            {
+                "id": repository.id,
+                "code": repository.code,
+                "name": repository.name,
+                "jurisdiction": repository.jurisdiction,
+                "base_url": repository.base_url,
+                "status": repository.status,
+                "description": repository.description,
+                "last_checked_at": repository.last_checked_at,
+                "active_patient_count": int(count or 0),
+            }
+            for repository, count in result.all()
+        ]
 
     async def check_availability(self, repository: Repository, status: RepositoryStatus) -> Repository:
         repository.status = status.value
