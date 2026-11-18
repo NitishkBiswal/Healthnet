@@ -391,7 +391,7 @@ class MigrationService:
         # FHIR PUT preserves resource IDs and makes retries idempotent. If both
         # logical repositories share one endpoint in the demo, this is a verified
         # in-place upsert; separate endpoints perform a real copy.
-        item.state = MigrationState.ENCRYPTED_TRANSFER.value
+        item.state = MigrationState.FHIR_TRANSFER.value
         for resource in exported:
             resource_type = resource["resourceType"]
             resource_id = resource["id"]
