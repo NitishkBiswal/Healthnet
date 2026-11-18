@@ -68,8 +68,8 @@ export default function AuditorPortal() {
                     <p className="font-bold">{review.proposed_given_name} {review.proposed_family_name}</p>
                     <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold">{review.status}</span>
                   </div>
-                  {review.review_type === "PROFILE_UPDATE" && <p className="mt-2">Patient whose profile is being edited: <strong>{review.target_patient_id ?? "—"}</strong></p>}
-                  <p>Possible matching identity: <strong>{review.candidate_patient_id}</strong></p>
+                  {review.review_type === "PROFILE_UPDATE" && <p className="mt-2">Patient Health ID: <strong>{review.target_health_id ?? review.target_patient_id ?? "—"}</strong></p>}
+                  <p>Possible matching Health ID: <strong>{review.candidate_health_id ?? review.candidate_patient_id}</strong></p>
                   <p>Match confidence: <strong>{review.confidence.toFixed(2)}</strong></p>
                   <p>Proposed date of birth: {review.proposed_date_of_birth}</p>
                   {review.proposed_sex && <p>Proposed sex: {review.proposed_sex}</p>}
