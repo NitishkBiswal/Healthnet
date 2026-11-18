@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.consent.models import Consent
@@ -105,7 +105,10 @@ class ConsentService:
                 Provider.keycloak_subject == provider_subject,
                 Provider.trust_status == "ACTIVE",
                 Consent.grantee_type == "PROVIDER",
-                Consent.status == ConsentStatus.ACTIVE.value,
+                or_(
+                    Consent.status == ConsentStatus.ACTIVE.value,
+                    Consent.reason.like("REPOSITORY_CHANGED:%"),
+                ),
                 Consent.valid_from <= moment,
                 (Consent.valid_until.is_(None) | (Consent.valid_until >= moment)),
                 PatientIdentity.status == "ACTIVE",
