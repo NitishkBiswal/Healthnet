@@ -16,6 +16,7 @@ class IdentityStatus(StrEnum):
 class DuplicateReviewStatus(StrEnum):
     PENDING = "PENDING"
     APPROVED_DUPLICATE = "APPROVED_DUPLICATE"
+    APPROVED_PROFILE_UPDATE = "APPROVED_PROFILE_UPDATE"
     REJECTED = "REJECTED"
 
 
