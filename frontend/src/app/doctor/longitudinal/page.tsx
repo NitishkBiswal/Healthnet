@@ -161,11 +161,6 @@ function DoctorLongitudinalViewContent() {
   const [authorized, setAuthorized] = useState<AuthorizedPatient[]>([]);
   const [error, setError] = useState("");
 
-  const patientSummary = useMemo(
-    () => authorized.find((item) => item.health_id === healthId),
-    [authorized, healthId],
-  );
-
   useEffect(() => {
     let cancelled = false;
     if (!healthId) {
