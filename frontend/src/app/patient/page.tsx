@@ -175,7 +175,7 @@ export default function PatientPortal() {
           <div className="grid gap-x-8 gap-y-5 md:grid-cols-2">
             <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Given name</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.given_name || "—"}</p></div>
             <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Family name</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.family_name || "—"}</p></div>
-            <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Date of birth</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.date_of_birth || "—"}</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Date of birth</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.date_of_birth ? new Date(patient.date_of_birth + "T00:00:00").toLocaleDateString() : "—"}</p></div>
             <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sex</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.sex || "—"}</p></div>
             <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Phone</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.phone || "—"}</p></div>
             <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Email</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.email || "—"}</p></div>
@@ -184,7 +184,7 @@ export default function PatientPortal() {
             <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Jurisdiction</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.issuing_jurisdiction}</p></div>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
-            <button type="button" onClick={() => { setProfileMessage(""); setEditingProfile(true); }} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white">Edit profile</button>
+            <button type="button" onClick={() => { setProfileMessage(""); setProfileForm({ given_name: patient.given_name ?? "", family_name: patient.family_name ?? "", date_of_birth: patient.date_of_birth ?? "", sex: patient.sex ?? "", phone: patient.phone ?? "", email: patient.email ?? "", address: patient.address ?? "" }); setEditingProfile(true); }} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white">Edit profile</button>
             {profileMessage && <p role="status" className="text-sm text-slate-700">{profileMessage}</p>}
           </div>
         </Card>
