@@ -144,7 +144,16 @@ class MigrationService:
             .where(TransferRequest.state == MigrationState.PENDING_AUDITOR_REVIEW.value)
             .order_by(TransferRequest.created_at.asc())
         )
-        return list(result.all())
+        reviews = list(result.all())
+        for review in reviews:
+            count = await self.session.scalar(
+                select(func.count(TransferRequest.id)).where(
+                    TransferRequest.health_id == review.health_id,
+                    TransferRequest.state == MigrationState.COMPLETED.value,
+                )
+            ) or 0
+            review.completed_transfer_count = int(count)
+        return reviews
 
     async def authorize_transfer(
         self, transfer_id: UUID, actor_id: str, authorization_reference: str
