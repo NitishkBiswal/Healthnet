@@ -244,7 +244,25 @@ class IdentityService:
         review = await self.session.get(DuplicateReview, review_id)
         if review is None or review.status != DuplicateReviewStatus.PENDING.value:
             return None
-        review.status = decision
+        if review.review_type == "PROFILE_UPDATE":
+            if decision not in {"APPROVED_PROFILE_UPDATE", "REJECTED"}:
+                raise ValueError("Profile update reviews require APPROVED_PROFILE_UPDATE or REJECTED")
+            if decision == "APPROVED_PROFILE_UPDATE":
+                patient = await self.session.get(PatientIdentity, review.target_patient_id)
+                if patient is None:
+                    raise ValueError("Patient profile for this review no longer exists")
+                patient.given_name = review.proposed_given_name
+                patient.family_name = review.proposed_family_name
+                patient.date_of_birth = review.proposed_date_of_birth
+                patient.sex = review.proposed_sex
+                patient.phone = review.proposed_phone
+                patient.email = review.proposed_email
+                patient.address = review.proposed_address
+            review.status = decision
+        else:
+            if decision not in {"APPROVED_DUPLICATE", "REJECTED"}:
+                raise ValueError("Invalid duplicate registration decision")
+            review.status = decision
         review.reviewer_note = reviewer_note
         review.reviewed_at = datetime.now(UTC)
         return review
