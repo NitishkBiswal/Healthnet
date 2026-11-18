@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { api, type Consent, type CurrentRecordLocation, type DuplicateReview, type Patient, type Transfer } from "@/lib/api";
+import { api, type Consent, type CurrentRecordLocation, type DuplicateReview, type Patient, type Repository, type Transfer } from "@/lib/api";
 import { Card, PortalShell } from "@/components/portal-shell";
 
 export default function PatientPortal() {
@@ -19,6 +19,10 @@ export default function PatientPortal() {
   const [consentMessage, setConsentMessage] = useState("");
   const [currentLocation, setCurrentLocation] = useState<CurrentRecordLocation | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [transferDestinations, setTransferDestinations] = useState<Repository[]>([]);
+  const [transferDestination, setTransferDestination] = useState("");
+  const [transferReason, setTransferReason] = useState("");
+  const [transferBusy, setTransferBusy] = useState(false);
   const [migrationMessage, setMigrationMessage] = useState("");
   const [profileForm, setProfileForm] = useState({ given_name: "", family_name: "", date_of_birth: "", sex: "", phone: "", email: "", address: "" });
   const [profileMessage, setProfileMessage] = useState("");
@@ -27,7 +31,7 @@ export default function PatientPortal() {
   const [medicalRecords, setMedicalRecords] = useState<Record<string, unknown> | null>(null);
   const [medicalRecordsError, setMedicalRecordsError] = useState("");
   const [recordsLoading, setRecordsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"profile" | "consents" | "records">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "consents" | "records" | "transfer">("profile");
 
   useEffect(() => {
     void api.myPatient().then(async (value) => {
@@ -40,6 +44,7 @@ export default function PatientPortal() {
       try { setConsents(await api.consents(value.display_health_id)); } catch {}
       try { setCurrentLocation(await api.currentRecordLocation(value.display_health_id)); } catch {}
       try { setTransfers(await api.myTransfers()); } catch {}
+      try { setTransferDestinations(await api.transferDestinations()); } catch {}
     }).catch(() => {});
     void api.myDuplicateReviews().then(setReviews).catch(() => {});
   }, []);
@@ -106,6 +111,47 @@ export default function PatientPortal() {
     } finally { setProfileSaving(false); }
   }
 
+  async function requestRepositoryTransfer() {
+    if (!transferDestination) {
+      setMigrationMessage("Select a destination repository.");
+      return;
+    }
+    if (transferReason.trim().length < 10) {
+      setMigrationMessage("Please provide a reason of at least 10 characters.");
+      return;
+    }
+    setTransferBusy(true);
+    setMigrationMessage("");
+    try {
+      const created = await api.createMyTransfer({
+        destination_repository_id: transferDestination,
+        reason: transferReason.trim(),
+      });
+      setTransfers((items) => [created, ...items]);
+      setTransferReason("");
+      setMigrationMessage("Transfer request submitted. Review the request below and authorize it to continue.");
+    } catch (reason: unknown) {
+      setMigrationMessage(reason instanceof Error ? reason.message : "Unable to submit repository transfer.");
+    } finally {
+      setTransferBusy(false);
+    }
+  }
+
+  async function authorizeRepositoryTransfer(transferId: string) {
+    setMigrationMessage("");
+    try {
+      const updated = await api.authorizeTransfer(transferId, "PATIENT_APPROVED_IN_PORTAL");
+      setTransfers((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setMigrationMessage(
+        updated.state === "PENDING_AUDITOR_REVIEW"
+          ? "You authorized this move. Because your account has reached the transfer review threshold, an Auditor must approve it before migration."
+          : "You authorized this move. It is now waiting for the HealthNet administrator to complete the verified transfer."
+      );
+    } catch (reason: unknown) {
+      setMigrationMessage(reason instanceof Error ? reason.message : "Unable to authorize repository transfer.");
+    }
+  }
+
   async function revokeConsent(consentId: string) {
     if (!patient) return;
     setConsentMessage("");
@@ -146,27 +192,69 @@ export default function PatientPortal() {
         </Card>
       )}
 
-      {transfers.some((transfer) => transfer.state === "REQUESTED") && (
-        <Card title="Patient authorization required">
-          <div className="space-y-3">
-            {transfers.filter((transfer) => transfer.state === "REQUESTED").map((transfer) => (
-              <div key={transfer.id} className="rounded-xl border border-amber-300 bg-amber-50 p-4">
-                <p className="font-bold text-slate-950">Repository migration requested</p>
-                <p className="mt-1 text-sm text-slate-700">An administrator requested that your record custody move to another repository.</p>
-                <button onClick={async () => { try { const updated = await api.authorizeTransfer(transfer.id, "PATIENT_APPROVED_IN_PORTAL"); setTransfers((items) => items.map((item) => item.id === updated.id ? updated : item)); setMigrationMessage("Migration authorized. The administrator can now complete the controlled transfer."); } catch (reason: unknown) { setMigrationMessage(reason instanceof Error ? reason.message : "Unable to authorize migration"); } }} className="mt-3 rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white">Authorize repository move</button>
-              </div>
-            ))}
-          </div>
-          {migrationMessage && <p className="mt-3 text-sm font-semibold text-slate-700">{migrationMessage}</p>}
-        </Card>
-      )}
-
       {patient && (
-        <nav aria-label="Patient portal tabs" className="mb-5 grid grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        <nav aria-label="Patient portal tabs" className="mb-5 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
           <button type="button" role="tab" aria-selected={activeTab === "profile"} onClick={() => setActiveTab("profile")} className={activeTab === "profile" ? "rounded-lg bg-slate-900 px-2 py-3 text-sm font-semibold text-white" : "rounded-lg px-2 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"}>Profile</button>
           <button type="button" role="tab" aria-selected={activeTab === "consents"} onClick={() => setActiveTab("consents")} className={activeTab === "consents" ? "rounded-lg bg-slate-900 px-2 py-3 text-sm font-semibold text-white" : "rounded-lg px-2 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"}>Grant & revoke consents</button>
           <button type="button" role="tab" aria-selected={activeTab === "records"} onClick={() => setActiveTab("records")} className={activeTab === "records" ? "rounded-lg bg-slate-900 px-2 py-3 text-sm font-semibold text-white" : "rounded-lg px-2 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"}>Medical records</button>
+          <button type="button" role="tab" aria-selected={activeTab === "transfer"} onClick={() => setActiveTab("transfer")} className={activeTab === "transfer" ? "rounded-lg bg-slate-900 px-2 py-3 text-sm font-semibold text-white" : "rounded-lg px-2 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"}>Transfer repository</button>
         </nav>
+      )}
+
+      {patient && activeTab === "transfer" && (
+        <div className="space-y-5">
+          <Card title="Transfer your medical records to another repository">
+            <p className="text-sm text-slate-600">Your Health ID never changes. After a verified transfer, the destination becomes the single authoritative repository used for future record access and updates.</p>
+            {currentLocation && (
+              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Current authoritative repository</p>
+                <p className="mt-1 text-lg font-bold text-slate-950">{currentLocation.repository_name}</p>
+                <p className="text-sm text-slate-700">{currentLocation.repository_code} · {currentLocation.jurisdiction}</p>
+              </div>
+            )}
+            <div className="mt-4 grid gap-3">
+              <label className="text-sm font-semibold text-slate-800">Destination repository
+                <select value={transferDestination} onChange={(event) => setTransferDestination(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2">
+                  <option value="">Choose a destination</option>
+                  {transferDestinations.map((repository) => <option key={repository.id} value={repository.id}>{repository.name} ({repository.code})</option>)}
+                </select>
+              </label>
+              <label className="text-sm font-semibold text-slate-800">Reason for transfer
+                <textarea value={transferReason} onChange={(event) => setTransferReason(event.target.value)} rows={3} maxLength={1000} placeholder="For example: I have permanently moved to Karnataka and want my medical records managed by the Karnataka repository." className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" />
+              </label>
+              <p className="text-xs text-slate-500">A clear reason is required and is retained in the transfer audit trail.</p>
+              <div>
+                <button type="button" disabled={transferBusy || !transferDestination || transferReason.trim().length < 10} onClick={() => void requestRepositoryTransfer()} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{transferBusy ? "Submitting..." : "Request repository transfer"}</button>
+              </div>
+            </div>
+            {migrationMessage && <p role="status" className="mt-3 rounded-lg bg-cyan-50 p-3 text-sm font-semibold text-slate-800">{migrationMessage}</p>}
+          </Card>
+
+          <Card title="Transfer history & approvals">
+            {transfers.length === 0 ? <p className="text-sm text-slate-600">No repository transfers have been requested yet.</p> : (
+              <div className="space-y-3">
+                {transfers.map((transfer) => (
+                  <div key={transfer.id} className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-bold text-slate-950">Repository transfer</p>
+                      <span className={transfer.state === "COMPLETED" ? "rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800" : transfer.state === "REJECTED" || transfer.state === "FAILED" ? "rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-800" : "rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900"}>{transfer.state.replaceAll("_", " ")}</span>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-700">Reason: {transfer.reason}</p>
+                    <p className="mt-1 text-xs text-slate-500">Requested {new Date(transfer.created_at).toLocaleString()} · Transfer ID: {transfer.id}</p>
+                    {transfer.review_required && <p className="mt-2 text-sm font-semibold text-amber-800">Auditor review: {transfer.review_status}</p>}
+                    {transfer.state === "REQUESTED" && (
+                      <button type="button" onClick={() => void authorizeRepositoryTransfer(transfer.id)} className="mt-3 rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white">Review & authorize this transfer</button>
+                    )}
+                    {transfer.state === "PENDING_AUDITOR_REVIEW" && <p className="mt-3 text-sm text-amber-800">Your authorization is recorded. An Auditor must review this transfer before it can proceed.</p>}
+                    {transfer.state === "PATIENT_AUTHORIZED" || transfer.state === "TRANSFER_AUTH_ISSUED" ? <p className="mt-3 text-sm text-cyan-800">Patient authorization complete. Waiting for the administrator to run and verify the transfer.</p> : null}
+                    {transfer.error_message && <p className="mt-2 text-sm text-red-700">{transfer.error_message}</p>}
+                    {transfer.reviewer_note && <p className="mt-2 text-sm text-slate-600">Auditor note: {transfer.reviewer_note}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
       )}
 
       {patient && activeTab === "profile" && (
