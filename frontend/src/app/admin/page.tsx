@@ -2,21 +2,30 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type CurrentRecordLocation, type MedicalImportResult, type Provider, type Repository, type Transfer } from "@/lib/api";
+import { api, type MedicalImportResult, type Provider, type Repository, type RepositorySummary, type Transfer } from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
+type AdminTab = "overview" | "repositories" | "transfers" | "providers" | "imports";
+
+const tabs: { id: AdminTab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "repositories", label: "Repositories" },
+  { id: "transfers", label: "Transfer Requests" },
+  { id: "providers", label: "Provider Registry" },
+  { id: "imports", label: "Medical Records Import" },
+];
+
+function stateLabel(state: string) {
+  return state.replaceAll("_", " ");
+}
+
 export default function AdminPortal() {
+  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [repos, setRepos] = useState<Repository[]>([]);
+  const [repoSummaries, setRepoSummaries] = useState<RepositorySummary[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
-  const [healthId, setHealthId] = useState("");
-  const [source, setSource] = useState("");
-  const [destination, setDestination] = useState("");
-  const [result, setResult] = useState<unknown>(null);
-  const [error, setError] = useState("");
-  const [currentLocation, setCurrentLocation] = useState<CurrentRecordLocation | null>(null);
-  const [transfer, setTransfer] = useState<Transfer | null>(null);
-  const [transferReason, setTransferReason] = useState("");
   const [adminTransfers, setAdminTransfers] = useState<Transfer[]>([]);
+  const [error, setError] = useState("");
   const [migrationMessage, setMigrationMessage] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<MedicalImportResult | null>(null);
@@ -33,79 +42,32 @@ export default function AdminPortal() {
 
   async function loadAdminTransfers() {
     try { setAdminTransfers(await api.adminTransfers()); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not load transfer queue"); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not load transfer requests"); }
   }
 
   async function loadProviders() {
+    try { setProviders(await api.providers()); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not load providers"); }
+  }
+
+  async function loadRepositories() {
     try {
-      setProviders(await api.providers());
+      const [all, summaries] = await Promise.all([api.repositories(), api.repositorySummaries()]);
+      setRepos(all);
+      setRepoSummaries(summaries);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load providers");
+      setError(e instanceof Error ? e.message : "Could not load repository information");
     }
   }
 
+  async function refreshAll() {
+    setError("");
+    await Promise.all([loadRepositories(), loadAdminTransfers(), loadProviders()]);
+  }
+
   useEffect(() => {
-    api.repositories()
-      .then(setRepos)
-      .catch((e) => setError(e instanceof Error ? e.message : "Could not load repositories"));
-    void loadProviders();
-    void loadAdminTransfers();
+    void refreshAll();
   }, []);
-
-  useEffect(() => {
-    if (!transfer?.id || transfer.state === "COMPLETED") return;
-
-    const refresh = async () => {
-      try {
-        const latest = await api.transferStatus(transfer.id);
-        setTransfer(latest);
-      } catch {
-        // Keep the current state visible if a background refresh temporarily fails.
-      }
-    };
-
-    const timer = window.setInterval(() => {
-      void refresh();
-    }, 2000);
-
-    return () => window.clearInterval(timer);
-  }, [transfer?.id, transfer?.state]);
-
-
-  async function migrate() {
-    setError("");
-    setMigrationMessage("");
-    try {
-      const created = await api.createTransfer({
-        health_id: healthId.trim(),
-        source_repository_id: source,
-        destination_repository_id: destination,
-        purpose: "MIGRATION",
-        scope: "FHIR",
-        reason: transferReason.trim(),
-      });
-      setTransfer(created);
-      await loadAdminTransfers();
-      setResult(created);
-      setMigrationMessage("Migration request created. Patient authorization is required.");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Migration request failed");
-    }
-  }
-
-  async function loadCurrentLocation() {
-    setError("");
-    setCurrentLocation(null);
-    if (!healthId.trim()) {
-      setError("Enter a Patient Health ID first");
-      return;
-    }
-    try {
-      setCurrentLocation(await api.currentRecordLocation(healthId.trim()));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not find the patient's current repository");
-    }
-  }
 
   async function completeQueuedTransfer(item: Transfer) {
     setError("");
@@ -118,13 +80,11 @@ export default function AdminPortal() {
       });
       const latest = await api.transferStatus(item.id);
       setAdminTransfers((items) => items.map((value) => value.id === latest.id ? latest : value));
-      if (healthId.trim() === item.health_id) {
-        setCurrentLocation(await api.currentRecordLocation(item.health_id));
-      }
       const manifest = completed as { resource_count?: number; validation_status?: string; package_hash?: string };
-      setMigrationMessage(`Transfer for ${item.health_id} completed: ${manifest.resource_count ?? 0} FHIR resources imported; destination validation ${manifest.validation_status ?? "completed"}. Package SHA-256: ${manifest.package_hash ?? "not returned"}`);
-      setResult(completed);
-      await loadAdminTransfers();
+      setMigrationMessage(
+        `Transfer for ${item.health_id} completed: ${manifest.resource_count ?? 0} FHIR resources imported; destination validation ${manifest.validation_status ?? "completed"}. Package SHA-256: ${manifest.package_hash ?? "not returned"}`
+      );
+      await Promise.all([loadAdminTransfers(), loadRepositories()]);
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "Transfer execution failed");
       await loadAdminTransfers();
@@ -142,185 +102,187 @@ export default function AdminPortal() {
   async function registerProvider() {
     setProviderMessage("");
     try {
-      const result = await api.onboardProvider({username:username.trim(),email:email.trim(),initial_password:initialPassword,
-        given_name:givenName.trim(),family_name:familyName.trim(),license_number:licenseNumber.trim(),jurisdiction:jurisdiction.trim()});
+      const result = await api.onboardProvider({
+        username: username.trim(), email: email.trim(), initial_password: initialPassword,
+        given_name: givenName.trim(), family_name: familyName.trim(),
+        license_number: licenseNumber.trim(), jurisdiction: jurisdiction.trim()
+      });
       setProviderMessage(`Doctor account created. Provider ID: ${result.provider.external_id}. Share the username and initial password with the doctor.`);
       setUsername(""); setEmail(""); setInitialPassword(""); setGivenName(""); setFamilyName(""); setLicenseNumber("");
       await loadProviders();
     } catch (e) { setProviderMessage(e instanceof Error ? e.message : "Doctor onboarding failed"); }
   }
 
+  function repositoryName(id: string) {
+    return repos.find((repository) => repository.id === id)?.name ?? "Repository details unavailable";
+  }
+
+  const activePatients = repoSummaries.reduce((total, repository) => total + repository.active_patient_count, 0);
+  const pendingTransfers = adminTransfers.filter((item) => !["COMPLETED", "REJECTED", "FAILED"].includes(item.state)).length;
+  const completedTransfers = adminTransfers.filter((item) => item.state === "COMPLETED").length;
+  const reviewWaiting = adminTransfers.filter((item) => item.state === "PENDING_AUDITOR_REVIEW").length;
+
   return (
     <PortalShell
       requiredRole="admin"
       title="Admin Portal"
-      description="Repository registry, trusted provider mapping and controlled EHR migration coordination."
+      description="Manage repositories, patient transfers, trusted providers and legacy medical-record imports."
     >
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card title="HealthNet Provider Registry">
-          <p className="text-sm text-slate-700">
-            Create the doctor account and HealthNet Provider ID together. HealthNet generates the Provider ID automatically; the doctor will see it after login and can share it with patients.
-          </p>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <Field value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Doctor username" />
-            <Field type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Doctor email" />
-            <Field type="password" value={initialPassword} onChange={(e) => setInitialPassword(e.target.value)} placeholder="Initial password (min 8 characters)" />
-            <Field value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} placeholder="License number" />
-            <Field value={givenName} onChange={(e) => setGivenName(e.target.value)} placeholder="Given name" />
-            <Field value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Family name" />
-            <Field value={jurisdiction} onChange={(e) => setJurisdiction(e.target.value)} placeholder="Jurisdiction (e.g. IN-OD)" />
-          </div>
-
+      <div className="mb-5 flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        {tabs.map((tab) => (
           <button
-            onClick={registerProvider}
-            className="mt-3 rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800"
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`rounded-lg px-4 py-2.5 text-sm font-bold transition ${activeTab === tab.id ? "bg-slate-950 text-white shadow" : "text-slate-700 hover:bg-slate-100"}`}
           >
-            Register Provider
+            {tab.label}
+            {tab.id === "transfers" && pendingTransfers > 0 && (
+              <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${activeTab === tab.id ? "bg-white/20 text-white" : "bg-amber-100 text-amber-900"}`}>{pendingTransfers}</span>
+            )}
           </button>
-
-          {providerMessage && (
-            <p className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm font-semibold text-slate-800">
-              {providerMessage}
-            </p>
-          )}
-
-          <div className="mt-5 space-y-2">
-            <p className="mt-2 text-xs font-medium text-slate-600">Provider IDs are generated by HealthNet. The doctor logs in with the account created here and sees the ID in the Doctor Portal.</p>
-            <h3 className="font-bold text-slate-950">Registered providers</h3>
-            {providers.length === 0 ? (
-              <p className="text-sm text-slate-600">No providers registered yet.</p>
-            ) : (
-              providers.map((provider) => (
-                <div key={provider.id} className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm">
-                  <div className="flex flex-wrap justify-between gap-2">
-                    <strong>{provider.external_id}</strong>
-                    <span>{provider.trust_status}</span>
-                  </div>
-                  <p className="text-slate-700">
-                    {provider.given_name} {provider.family_name} · {provider.jurisdiction}
-                  </p>
-                  <p className="break-all font-mono text-xs text-slate-600">
-                    {provider.keycloak_subject || "Not linked"}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-
-        <div className="space-y-5">
-          <Card title="Jurisdictional repositories">
-            <div className="space-y-3">
-              {repos.map((r) => (
-                <div key={r.id} className="rounded-lg border-2 border-slate-300 bg-slate-50 p-3">
-                  <div className="flex justify-between gap-3">
-                    <strong className="text-slate-950">{r.name}</strong>
-                    <span className="text-xs font-bold text-emerald-800">{r.status}</span>
-                  </div>
-                  <p className="text-xs font-medium text-slate-700">
-                    {r.code} · {r.jurisdiction} · {r.base_url}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card title="Patient record custody & migration">
-            <p className="text-sm text-slate-700">
-              Each patient has one authoritative repository. HealthNet does not scan other repositories when a doctor requests the record.
-            </p>
-            <div className="mt-3 flex gap-2">
-              <Field value={healthId} onChange={(e) => setHealthId(e.target.value)} placeholder="Patient Health ID" />
-              <button onClick={loadCurrentLocation} className="rounded-lg border-2 border-slate-400 px-4 py-2 text-sm font-bold text-slate-900">Find current repository</button>
-            </div>
-            {currentLocation && (
-              <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm">
-                <p className="font-bold text-slate-950">Current: {currentLocation.repository_name}</p>
-                <p className="text-slate-700">{currentLocation.repository_code} · {currentLocation.jurisdiction}</p>
-              </div>
-            )}
-            <div className="mt-5 space-y-3">
-              <select value={source} onChange={(e) => setSource(e.target.value)} className="w-full rounded-lg border-2 border-slate-400 bg-white px-3 py-2 text-sm font-medium text-slate-950">
-                <option value="">Source repository</option>
-                {repos.map((r) => <option key={r.id} value={r.id}>{r.code} — {r.name}</option>)}
-              </select>
-              <select value={destination} onChange={(e) => setDestination(e.target.value)} className="w-full rounded-lg border-2 border-slate-400 bg-white px-3 py-2 text-sm font-medium text-slate-950">
-                <option value="">Destination repository</option>
-                {repos.map((r) => <option key={r.id} value={r.id}>{r.code} — {r.name}</option>)}
-              </select>
-              <label className="block text-sm font-semibold text-slate-800">Reason for transfer
-                <textarea value={transferReason} onChange={(e) => setTransferReason(e.target.value)} rows={2} minLength={10} placeholder="Explain why this patient record needs to move to the destination repository." className="mt-1 w-full rounded-lg border-2 border-slate-300 px-3 py-2 font-normal" />
-              </label>
-              <button disabled={transferReason.trim().length < 10} onClick={migrate} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-50">Request repository move</button>
-              {transfer && (
-                <div className="rounded-lg border border-cyan-300 bg-cyan-50 p-3 text-sm">
-                  <p className="font-bold text-slate-950">Migration state: {transfer.state}</p>
-                  {(transfer.state === "PATIENT_AUTHORIZED" || transfer.state === "TRANSFER_AUTH_ISSUED") && (
-                    <button
-                      onClick={async () => {
-                        try {
-                          const authorization = await api.issueTransferToken(transfer.id);
-                          const completed = await api.executeTransfer(transfer.id, {
-                            authorization_token: authorization.authorization_token,
-                            resource_count: 0,
-                          });
-                          const updatedLocation = await api.currentRecordLocation(healthId.trim());
-                          const latestTransfer = await api.transferStatus(transfer.id);
-                          setTransfer(latestTransfer);
-                          setCurrentLocation(updatedLocation);
-                          setResult(completed);
-                          const validation = typeof completed === "object" && completed !== null && "validation_status" in completed
-                            ? String((completed as { validation_status: unknown }).validation_status)
-                            : "VERIFIED";
-                          setMigrationMessage(`Migration completed (${validation}). The patient's active repository is now ${updatedLocation.repository_name} (${updatedLocation.repository_code}).`);
-                        } catch (e) {
-                          setMigrationMessage(e instanceof Error ? e.message : "Migration execution failed");
-                        }
-                      }}
-                      className="mt-3 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white"
-                    >
-                      Complete validated migration
-                    </button>
-                  )}
-                  <p className="mt-2 text-slate-700">{migrationMessage}</p>
-                </div>
-              )}
-              {result !== null && (
-                <pre className="overflow-auto rounded-lg border-2 border-slate-300 bg-slate-100 p-3 text-xs font-medium text-slate-900">{JSON.stringify(result, null, 2)}</pre>
-              )}
-            </div>
-          </Card>
-        </div>
+        ))}
+        <button type="button" onClick={() => void refreshAll()} className="ml-auto rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Refresh data</button>
       </div>
 
-      <div className="mt-5">
-        <Card title="Patient-initiated repository transfer queue">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-slate-600">Transfers authorized by patients appear here. If Auditor review was triggered, the transfer cannot be executed until it is approved.</p>
-            <button type="button" onClick={() => void loadAdminTransfers()} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Refresh queue</button>
+      {activeTab === "overview" && (
+        <div className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: "Registered repositories", value: repos.length, detail: "Configured HealthNet destinations" },
+              { label: "Patients in active custody", value: activePatients, detail: "Unique active patient assignments" },
+              { label: "Transfers requiring action", value: pendingTransfers, detail: `${reviewWaiting} waiting for Auditor review` },
+              { label: "Completed transfers", value: completedTransfers, detail: "Verified repository moves" },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm font-semibold text-slate-600">{item.label}</p>
+                <p className="mt-2 text-3xl font-bold tabular-nums text-slate-950">{item.value}</p>
+                <p className="mt-1 text-xs text-slate-500">{item.detail}</p>
+              </div>
+            ))}
           </div>
-          {adminTransfers.length === 0 ? <p className="text-sm text-slate-600">No pending repository transfers.</p> : (
-            <div className="space-y-3">
-              {adminTransfers.map((item) => (
-                <div key={item.id} className="rounded-xl border border-slate-200 p-4 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-bold text-slate-950">{item.health_id}</p>
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-800">{item.state.replaceAll("_", " ")}</span>
+          <Card title="Patient distribution by repository">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {repoSummaries.map((repository) => (
+                <div key={repository.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div><p className="font-bold text-slate-950">{repository.name}</p><p className="mt-1 text-xs text-slate-600">{repository.code} · {repository.jurisdiction}</p></div>
+                    <span className={`rounded-full px-2 py-1 text-xs font-bold ${repository.status === "ONLINE" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{repository.status}</span>
                   </div>
-                  <p className="mt-1 text-slate-700">Reason: {item.reason}</p>
-                  {item.review_required && <p className="mt-1 font-semibold text-amber-800">Auditor review: {item.review_status}</p>}
-                  {item.state === "PENDING_AUDITOR_REVIEW" && <p className="mt-2 text-amber-800">Waiting for Auditor approval.</p>}
-                  {item.state === "PATIENT_AUTHORIZED" || item.state === "TRANSFER_AUTH_ISSUED" ? (
-                    <button type="button" onClick={() => void completeQueuedTransfer(item)} className="mt-3 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white">Run verified transfer</button>
-                  ) : null}
-                  {item.error_message && <p className="mt-2 text-red-700">{item.error_message}</p>}
+                  <p className="mt-4 text-3xl font-bold tabular-nums text-slate-950">{repository.active_patient_count}</p>
+                  <p className="text-xs font-medium text-slate-600">Patients currently assigned</p>
                 </div>
               ))}
+              {repoSummaries.length === 0 && <p className="text-sm text-slate-600">Repository summary is not available yet.</p>}
+            </div>
+          </Card>
+          <Card title="Latest transfer activity">
+            {adminTransfers.length === 0 ? <p className="text-sm text-slate-600">No repository transfer requests found.</p> : (
+              <div className="space-y-2">
+                {adminTransfers.slice(0, 5).map((item) => (
+                  <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 text-sm">
+                    <div><p className="font-bold text-slate-950">{item.health_id}</p><p className="text-xs text-slate-600">{repositoryName(item.source_repository_id)} → {repositoryName(item.destination_repository_id)}</p></div>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{stateLabel(item.state)}</span>
+                  </div>
+                ))}
+                <button type="button" onClick={() => setActiveTab("transfers")} className="text-sm font-bold text-cyan-800 underline">View all transfer requests</button>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {activeTab === "repositories" && (
+        <Card title="Repository registry and patient distribution">
+          <p className="mb-4 text-sm text-slate-600">Patient counts are based on distinct Health IDs whose Record Locator currently marks this repository as ACTIVE. Historical/inactive assignments are not counted.</p>
+          <div className="space-y-3">
+            {repoSummaries.map((repository) => (
+              <div key={repository.id} className="rounded-xl border border-slate-200 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div><h3 className="font-bold text-slate-950">{repository.name}</h3><p className="mt-1 text-xs text-slate-600">{repository.code} · {repository.jurisdiction}</p></div>
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">{repository.status}</span>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Active patients</p><p className="text-2xl font-bold tabular-nums text-slate-950">{repository.active_patient_count}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Jurisdiction</p><p className="mt-1 font-bold text-slate-900">{repository.jurisdiction}</p></div>
+                </div>
+                <p className="mt-3 break-all text-xs text-slate-600">FHIR endpoint: {repository.base_url}</p>
+                {repository.description && <p className="mt-1 text-sm text-slate-600">{repository.description}</p>}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {activeTab === "transfers" && (
+        <Card title="Patient-initiated repository transfer requests">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <p className="max-w-3xl text-sm text-slate-600">This is the complete transfer register, including pending, rejected, failed and completed requests. The patient authorizes the move; the Auditor independently approves requests that trigger review; Admin executes only eligible transfers.</p>
+            <button type="button" onClick={() => void loadAdminTransfers()} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Refresh requests</button>
+          </div>
+          {adminTransfers.length === 0 ? <p className="text-sm text-slate-600">No transfer requests have been submitted.</p> : (
+            <div className="space-y-3">
+              {adminTransfers.map((item) => {
+                const canExecute = item.state === "PATIENT_AUTHORIZED" || item.state === "TRANSFER_AUTH_ISSUED";
+                return (
+                  <div key={item.id} className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div><p className="font-bold text-slate-950">Health ID: {item.health_id}</p><p className="mt-1 text-sm text-slate-700">{repositoryName(item.source_repository_id)} → {repositoryName(item.destination_repository_id)}</p></div>
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${item.state === "COMPLETED" ? "bg-emerald-100 text-emerald-800" : item.state === "PENDING_AUDITOR_REVIEW" ? "bg-amber-100 text-amber-900" : item.state === "REJECTED" || item.state === "FAILED" ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-800"}`}>{stateLabel(item.state)}</span>
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-2">
+                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Patient's reason</p><p className="mt-1 text-sm text-slate-900">{item.reason}</p></div>
+                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Approval status</p><p className="mt-1 text-sm font-bold text-slate-900">{item.review_required ? `Auditor review: ${item.review_status}` : "Auditor review not required"}</p>{item.reviewed_at && <p className="mt-1 text-xs text-slate-600">Reviewed {new Date(item.reviewed_at).toLocaleString()}</p>}{item.reviewer_note && <p className="mt-1 text-xs text-slate-600">Note: {item.reviewer_note}</p>}</div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs text-slate-500">Submitted {new Date(item.created_at).toLocaleString()} · ID {item.id}</p>
+                      {canExecute && <button type="button" onClick={() => void completeQueuedTransfer(item)} className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800">Execute verified transfer</button>}
+                    </div>
+                    {item.state === "PENDING_AUDITOR_REVIEW" && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs font-semibold text-amber-900">Waiting for independent Auditor approval. Transfer execution is disabled.</p>}
+                    {item.state === "REQUESTED" && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-700">Waiting for patient authorization.</p>}
+                    {item.error_message && <p className="mt-2 text-xs text-red-700">{item.error_message}</p>}
+                    {item.package_hash && <p className="mt-2 break-all text-xs text-slate-500">Verified package SHA-256: {item.package_hash}</p>}
+                  </div>
+                );
+              })}
             </div>
           )}
-          {migrationMessage && <p className="mt-3 text-sm font-semibold text-slate-700">{migrationMessage}</p>}
+          {migrationMessage && <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{migrationMessage}</p>}
         </Card>
+      )}
+
+      {activeTab === "providers" && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Card title="Register a healthcare provider">
+            <p className="text-sm text-slate-700">Create the doctor account and HealthNet Provider ID together. HealthNet generates the Provider ID automatically; the doctor will see it after login.</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <Field value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Doctor username" />
+              <Field type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Doctor email" />
+              <Field type="password" value={initialPassword} onChange={(e) => setInitialPassword(e.target.value)} placeholder="Initial password (min 8 characters)" />
+              <Field value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} placeholder="License number" />
+              <Field value={givenName} onChange={(e) => setGivenName(e.target.value)} placeholder="Given name" />
+              <Field value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Family name" />
+              <Field value={jurisdiction} onChange={(e) => setJurisdiction(e.target.value)} placeholder="Jurisdiction (e.g. IN-OD)" />
+            </div>
+            <button onClick={registerProvider} className="mt-3 rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">Register Provider</button>
+            {providerMessage && <p className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm font-semibold text-slate-800">{providerMessage}</p>}
+          </Card>
+          <Card title="Registered providers">
+            <p className="mb-3 text-xs text-slate-600">Provider IDs are generated by HealthNet and linked to the provider's login account.</p>
+            {providers.length === 0 ? <p className="text-sm text-slate-600">No providers registered yet.</p> : (
+              <div className="space-y-2">{providers.map((provider) => (
+                <div key={provider.id} className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm">
+                  <div className="flex flex-wrap justify-between gap-2"><strong>{provider.external_id}</strong><span>{provider.trust_status}</span></div>
+                  <p className="text-slate-700">{provider.given_name} {provider.family_name} · {provider.jurisdiction}</p>
+                  <p className="break-all font-mono text-xs text-slate-600">{provider.keycloak_subject || "Not linked"}</p>
+                </div>
+              ))}</div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {activeTab === "imports" && (
         <Card title="Import existing medical records (CSV / Excel)">
           <p className="text-sm text-slate-700">Admin-only import. Each row is matched to a HealthNet Health ID and routed to that patient's active repository. Supported record types: CONDITION and OBSERVATION.</p>
           <div className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs text-slate-700">
@@ -341,13 +303,9 @@ export default function AdminPortal() {
             </div>
           )}
         </Card>
-      </div>
-
-      {error && (
-        <p className="mt-5 rounded-lg border-2 border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-800">
-          {error}
-        </p>
       )}
+
+      {error && <p className="mt-5 rounded-lg border-2 border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p>}
     </PortalShell>
   );
 }
