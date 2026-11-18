@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class MigrationState(StrEnum):
     REQUESTED = "REQUESTED"
+    PENDING_AUDITOR_REVIEW = "PENDING_AUDITOR_REVIEW"
+    REJECTED = "REJECTED"
     PATIENT_AUTHORIZED = "PATIENT_AUTHORIZED"
     POLICY_LEGAL_CHECK = "POLICY_LEGAL_CHECK"
     TRANSFER_AUTH_ISSUED = "TRANSFER_AUTH_ISSUED"
@@ -28,6 +30,17 @@ class TransferRequestCreate(BaseModel):
     destination_repository_id: UUID
     purpose: str = Field(min_length=2, max_length=128)
     scope: str = Field(min_length=1, max_length=128)
+    reason: str = Field(min_length=10, max_length=1000)
+
+
+class PatientTransferCreate(BaseModel):
+    destination_repository_id: UUID
+    reason: str = Field(min_length=10, max_length=1000)
+
+
+class TransferReviewDecision(BaseModel):
+    decision: str = Field(pattern=r"^(APPROVE|REJECT)$")
+    reviewer_note: str | None = Field(default=None, max_length=1000)
 
 
 class TransferAuthorizationRequest(BaseModel):
@@ -51,6 +64,12 @@ class TransferStatus(BaseModel):
     destination_repository_id: UUID
     purpose: str
     scope: str
+    reason: str
+    review_required: bool = False
+    review_status: str = "NOT_REQUIRED"
+    reviewed_by: str | None = None
+    reviewed_at: datetime | None = None
+    reviewer_note: str | None = None
     state: MigrationState
     authorization_reference: str | None
     package_hash: str | None
