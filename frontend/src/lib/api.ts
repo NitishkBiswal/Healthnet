@@ -75,7 +75,7 @@ export interface Consent {
 }
 export interface AuthorizedPatient {
   health_id: string; given_name: string; family_name: string; consent_id: string; purpose: string;
-  scopes: string[]; valid_from: string; valid_until?: string;
+  scopes: string[]; valid_from: string; valid_until?: string; status?: string; reason?: string;
 }
 export interface Provider {
   id: string; external_id: string; given_name: string; family_name: string; license_number: string;
