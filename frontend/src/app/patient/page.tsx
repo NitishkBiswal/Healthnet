@@ -26,6 +26,7 @@ export default function PatientPortal() {
   const [medicalRecords, setMedicalRecords] = useState<Record<string, unknown> | null>(null);
   const [medicalRecordsError, setMedicalRecordsError] = useState("");
   const [recordsLoading, setRecordsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"profile" | "consents" | "records">("profile");
 
   useEffect(() => {
     void api.myPatient().then(async (value) => {
@@ -186,8 +187,8 @@ export default function PatientPortal() {
                     <div className="mt-2 space-y-1 text-sm text-slate-700">
                       {value && <p>Result: {value.value ?? "—"} {value.unit ?? ""}</p>}
                       {components.map((component, i) => <p key={i}>{component.code?.coding?.[0]?.display ?? "Measurement"}: {component.valueQuantity?.value ?? "—"} {component.valueQuantity?.unit ?? ""}</p>)}
-                      <p>Status: {String(resource.status ?? "Not specified")}</p>
-                      <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-slate-950 p-3 text-xs text-slate-100">{JSON.stringify(resource, null, 2)}</pre>
+                      <p>Status: {String((resource.clinicalStatus as { coding?: { display?: string; code?: string }[] } | undefined)?.coding?.[0]?.display ?? (resource.clinicalStatus as { coding?: { display?: string; code?: string }[] } | undefined)?.coding?.[0]?.code ?? resource.status ?? "Not specified")}</p>
+                      <details className="mt-2"><summary className="cursor-pointer text-xs font-semibold text-cyan-800">View original FHIR details</summary><pre className="mt-2 max-h-64 overflow-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-100">{JSON.stringify(resource, null, 2)}</pre></details>
                     </div>
                   </details>;
                 })}</div>}
@@ -206,7 +207,7 @@ export default function PatientPortal() {
         </Card>
       )}
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+      {activeTab === "profile" && <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <Card title="Where is my medical record?">
           {currentLocation ? (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
@@ -232,7 +233,7 @@ export default function PatientPortal() {
           )}
         </Card>
 
-        <Card title="Consent & emergency profile">
+        {activeTab === "consents" && <Card title="Grant & revoke doctor access">
           {patient && (
             <div className="mb-5 rounded-xl border border-cyan-200 bg-cyan-50 p-4">
               <h3 className="font-bold text-slate-950">Grant a doctor access</h3>
