@@ -23,10 +23,17 @@ export default function PatientPortal() {
   const [aadhaarStatus, setAadhaarStatus] = useState<AadhaarStatus | null>(null);
   const [aadhaarNumber, setAadhaarNumber] = useState("");
   const [aadhaarMessage, setAadhaarMessage] = useState("");
+  const [medicalRecords, setMedicalRecords] = useState<Record<string, unknown> | null>(null);
+  const [medicalRecordsError, setMedicalRecordsError] = useState("");
+  const [recordsLoading, setRecordsLoading] = useState(false);
 
   useEffect(() => {
     void api.myPatient().then(async (value) => {
       setPatient(value);
+      setRecordsLoading(true);
+      try { setMedicalRecords(await api.myMedicalRecords()); }
+      catch (reason: unknown) { setMedicalRecordsError(reason instanceof Error ? reason.message : "Unable to load medical records"); }
+      finally { setRecordsLoading(false); }
       try { setAadhaarStatus(await api.myAadhaarStatus()); } catch {}
       try { setConsents(await api.consents(value.display_health_id)); } catch {}
       try { setCurrentLocation(await api.currentRecordLocation(value.display_health_id)); } catch {}
@@ -147,6 +154,54 @@ export default function PatientPortal() {
             </div>
             {aadhaarMessage && <p className="text-sm text-slate-700">{aadhaarMessage}</p>}
             <p className="text-xs text-slate-500">HealthNet checks only the 12-digit format. No UIDAI authentication or verification is performed.</p>
+          </div>
+        </Card>
+      )}
+
+      {patient && (
+        <Card title="My Medical Records">
+          <div className="space-y-4">
+            {recordsLoading && <p className="text-sm text-slate-600">Loading your records from your current repository…</p>}
+            {medicalRecordsError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{medicalRecordsError}</p>}
+            {medicalRecords && (() => {
+              const records = Array.isArray(medicalRecords.records) ? medicalRecords.records as { resource_type?: string; resource?: Record<string, unknown> }[] : [];
+              const dateOf = (r: Record<string, unknown>) => String(r.effectiveDateTime ?? r.recordedDate ?? r.onsetDateTime ?? r.authoredOn ?? r.date ?? "");
+              const sorted = [...records].sort((a,b) => dateOf(b.resource ?? {}).localeCompare(dateOf(a.resource ?? {})));
+              const conditions = sorted.filter(item => item.resource_type === "Condition");
+              const observations = sorted.filter(item => item.resource_type === "Observation");
+              const medications = sorted.filter(item => item.resource_type === "MedicationRequest" || item.resource_type === "MedicationStatement");
+              const labelOf = (r: Record<string, unknown>) => {
+                const code = r.code as { text?: string; coding?: { display?: string }[] } | undefined;
+                return code?.text ?? code?.coding?.find(c => c.display)?.display ?? String(r.resourceType ?? "Clinical record");
+              };
+              const dateLabel = (r: Record<string, unknown>) => { const value = dateOf(r); return value ? new Date(value).toLocaleString() : "Date not recorded"; };
+              const renderGroup = (title: string, items: typeof sorted) => <section key={title}>
+                <h3 className="mb-2 font-bold text-slate-950">{title} ({items.length})</h3>
+                {items.length === 0 ? <p className="text-sm text-slate-500">No records found.</p> : <div className="space-y-2">{items.map((item, index) => {
+                  const resource = item.resource ?? {};
+                  const value = resource.valueQuantity as { value?: number; unit?: string } | undefined;
+                  const components = Array.isArray(resource.component) ? resource.component as { code?: { coding?: { display?: string }[] }; valueQuantity?: { value?: number; unit?: string } }[] : [];
+                  return <details key={String(resource.id ?? index)} className="rounded-lg border border-slate-200 p-3">
+                    <summary className="cursor-pointer text-sm font-semibold text-slate-900">{labelOf(resource)} <span className="font-normal text-slate-500">· {dateLabel(resource)}</span></summary>
+                    <div className="mt-2 space-y-1 text-sm text-slate-700">
+                      {value && <p>Result: {value.value ?? "—"} {value.unit ?? ""}</p>}
+                      {components.map((component, i) => <p key={i}>{component.code?.coding?.[0]?.display ?? "Measurement"}: {component.valueQuantity?.value ?? "—"} {component.valueQuantity?.unit ?? ""}</p>)}
+                      <p>Status: {String(resource.status ?? "Not specified")}</p>
+                      <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-slate-950 p-3 text-xs text-slate-100">{JSON.stringify(resource, null, 2)}</pre>
+                    </div>
+                  </details>;
+                })}</div>}
+              </section>;
+              return <>
+                <div className="rounded-lg bg-cyan-50 p-3 text-sm text-slate-700">Health ID: <strong>{String(medicalRecords.health_id ?? patient.display_health_id)}</strong> · Repository: <strong>{String((medicalRecords.current_repository as { name?: string } | null)?.name ?? "Unavailable")}</strong> · Status: <strong>{String(medicalRecords.completeness ?? "Unknown")}</strong></div>
+                {renderGroup("Chronic conditions & medical problems", conditions)}
+                {renderGroup("Observations & laboratory results", observations)}
+                {renderGroup("Medications", medications)}
+                {renderGroup("Other clinical records", sorted.filter(item => !["Condition", "Observation", "MedicationRequest", "MedicationStatement"].includes(item.resource_type ?? "") && item.resource_type !== "Patient"))}
+                {Array.isArray(medicalRecords.errors) && (medicalRecords.errors as string[]).length > 0 && <p className="text-xs text-amber-700">Some record types could not be loaded: {(medicalRecords.errors as string[]).join("; ")}</p>}
+              </>;
+            })()}
+            {medicalRecords && Array.isArray(medicalRecords.records) && (medicalRecords.records as unknown[]).length === 0 && !recordsLoading && <p className="text-sm text-slate-600">No clinical records were found in your current repository.</p>}
           </div>
         </Card>
       )}
