@@ -44,12 +44,13 @@ export interface PatientRegistration {
 export interface MatchCandidate { patient_id: string; health_id: string; confidence: number; band: string; }
 export interface RegistrationResult { outcome: string; patient?: Patient; matches: MatchCandidate[]; duplicate_review_id?: string; }
 export interface DuplicateReview {
-  id: string; candidate_patient_id: string; confidence: number; status: string; reviewer_note?: string;
+  id: string; candidate_patient_id: string; review_type?: string; target_patient_id?: string; proposed_address?: string; confidence: number; status: string; reviewer_note?: string;
   proposed_given_name: string; proposed_family_name: string; proposed_date_of_birth: string; proposed_sex?: string;
   proposed_phone?: string; proposed_email?: string; proposed_issuing_jurisdiction?: string;
   proposed_identifiers?: { identifier_type: string; identifier_value: string; issuing_authority?: string }[];
   created_at: string; reviewed_at?: string;
 }
+export interface ProfileUpdateResult { outcome: "UPDATED" | "PENDING_REVIEW"; patient?: Patient; duplicate_review_id?: string; }
 export interface Repository { id: string; code: string; name: string; jurisdiction: string; base_url: string; status: string; description?: string; }
 export interface Consent {
   id: string; health_id: string; grantee_type: string; grantee_id: string; purpose: string; scopes: string[];
@@ -97,13 +98,13 @@ export const api = {
 
   patient: (healthId: string) => request<Patient>("/identity/" + encodeURIComponent(healthId)),
   myPatient: () => request<Patient>("/identity/me"),
-  updateMyProfile: (body: Pick<Patient, "given_name" | "family_name" | "date_of_birth" | "sex" | "phone" | "email" | "address">) => request<Patient>("/identity/me/profile", { method: "PUT", body: JSON.stringify(body) }),
+  updateMyProfile: (body: Pick<Patient, "given_name" | "family_name" | "date_of_birth" | "sex" | "phone" | "email" | "address">) => request<ProfileUpdateResult>("/identity/me/profile", { method: "PUT", body: JSON.stringify(body) }),
   myAadhaarStatus: () => request<AadhaarStatus>("/identity/me/aadhaar"),
   updateMyAadhaar: (aadhaar_number: string) => request<AadhaarStatus>("/identity/me/aadhaar", { method: "PUT", body: JSON.stringify({ aadhaar_number }) }),
   registerPatient: (body: PatientRegistration) => request<RegistrationResult>("/identity/register", { method: "POST", body: JSON.stringify(body) }),
   myDuplicateReviews: () => request<DuplicateReview[]>("/identity/duplicate-reviews/mine"),
   duplicateReviews: () => request<DuplicateReview[]>("/identity/duplicate-reviews"),
-  decideDuplicateReview: (id: string, decision: "APPROVED_DUPLICATE" | "REJECTED", reviewer_note?: string) =>
+  decideDuplicateReview: (id: string, decision: "APPROVED_DUPLICATE" | "APPROVED_PROFILE_UPDATE" | "REJECTED", reviewer_note?: string) =>
     request<DuplicateReview>("/identity/duplicate-reviews/" + encodeURIComponent(id) + "/decision", { method: "POST", body: JSON.stringify({ decision, reviewer_note }) }),
   createConsent: (body: { health_id: string; grantee_type: string; grantee_id: string; purpose: string; scopes: string[]; valid_from: string; valid_until?: string; reason?: string }) =>
     request<Consent>("/consent/consents", { method: "POST", body: JSON.stringify(body) }),
