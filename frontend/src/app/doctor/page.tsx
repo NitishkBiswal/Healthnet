@@ -144,7 +144,7 @@ export default function DoctorPortal() {
                     </p>
                   </button>
                 );
-              })}}
+              })}
             </div>
           )}
         </Card>
