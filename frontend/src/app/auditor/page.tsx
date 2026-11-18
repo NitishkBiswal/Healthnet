@@ -44,7 +44,7 @@ export default function AuditorPortal() {
     }
   }
 
-  async function decide(id: string, decision: "APPROVED_DUPLICATE" | "REJECTED") {
+  async function decide(id: string, decision: "APPROVED_DUPLICATE" | "APPROVED_PROFILE_UPDATE" | "REJECTED") {
     setError("");
     try {
       await api.decideDuplicateReview(id, decision);
@@ -68,15 +68,23 @@ export default function AuditorPortal() {
                     <p className="font-bold">{review.proposed_given_name} {review.proposed_family_name}</p>
                     <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold">{review.status}</span>
                   </div>
-                  <p className="mt-2">Candidate identity: <strong>{review.candidate_patient_id}</strong></p>
-                  <p>Confidence: <strong>{review.confidence.toFixed(2)}</strong></p>
-                  <p>DOB: {review.proposed_date_of_birth}</p>
-                  {review.proposed_email && <p>Email: {review.proposed_email}</p>}
-                  {review.proposed_phone && <p>Phone: {review.proposed_phone}</p>}
+                  {review.review_type === "PROFILE_UPDATE" && <p className="mt-2">Patient whose profile is being edited: <strong>{review.target_patient_id ?? "—"}</strong></p>}
+                  <p>Possible matching identity: <strong>{review.candidate_patient_id}</strong></p>
+                  <p>Match confidence: <strong>{review.confidence.toFixed(2)}</strong></p>
+                  <p>Proposed date of birth: {review.proposed_date_of_birth}</p>
+                  {review.proposed_sex && <p>Proposed sex: {review.proposed_sex}</p>}
+                  {review.proposed_email && <p>Proposed email: {review.proposed_email}</p>}
+                  {review.proposed_phone && <p>Proposed phone: {review.proposed_phone}</p>}
+                  {review.proposed_address && <p>Proposed address: {review.proposed_address}</p>}
                   {review.status === "PENDING" && (
-                    <div className="mt-4 flex gap-2">
-                      <button onClick={() => decide(review.id, "APPROVED_DUPLICATE")} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">Approve duplicate</button>
-                      <button onClick={() => decide(review.id, "REJECTED")} className="rounded-lg border border-slate-400 bg-white px-3 py-2 text-xs font-bold text-slate-900">Reject match</button>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {review.review_type === "PROFILE_UPDATE" ? <>
+                        <button onClick={() => decide(review.id, "APPROVED_PROFILE_UPDATE")} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">Approve profile update</button>
+                        <button onClick={() => decide(review.id, "REJECTED")} className="rounded-lg border border-slate-400 bg-white px-3 py-2 text-xs font-bold text-slate-900">Reject profile update</button>
+                      </> : <>
+                        <button onClick={() => decide(review.id, "APPROVED_DUPLICATE")} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">Approve duplicate</button>
+                        <button onClick={() => decide(review.id, "REJECTED")} className="rounded-lg border border-slate-400 bg-white px-3 py-2 text-xs font-bold text-slate-900">Reject match</button>
+                      </>}
                     </div>
                   )}
                 </div>
