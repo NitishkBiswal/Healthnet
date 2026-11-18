@@ -1,13 +1,15 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.consent.models import Consent
+from app.consent.dismissal_models import ProviderNoticeDismissal
 from app.consent.schemas import ConsentCreateRequest, ConsentStatus
 from app.identity.models import PatientIdentity
 from app.provider_trust.models import Provider
+from app.migration.models import TransferRequest
 
 
 class ConsentService:
@@ -105,11 +107,43 @@ class ConsentService:
                 Provider.keycloak_subject == provider_subject,
                 Provider.trust_status == "ACTIVE",
                 Consent.grantee_type == "PROVIDER",
-                Consent.status == ConsentStatus.ACTIVE.value,
+                or_(
+                    Consent.status == ConsentStatus.ACTIVE.value,
+                    Consent.reason.like("REPOSITORY_CHANGED:%"),
+                ),
                 Consent.valid_from <= moment,
                 (Consent.valid_until.is_(None) | (Consent.valid_until >= moment)),
                 PatientIdentity.status == "ACTIVE",
+                ~select(ProviderNoticeDismissal.consent_id).where(
+                    ProviderNoticeDismissal.consent_id == Consent.id,
+                    ProviderNoticeDismissal.provider_subject == provider_subject,
+                ).exists(),
             )
             .order_by(PatientIdentity.family_name, PatientIdentity.given_name)
         )
-        return list(result.all())
+        rows = list(result.all())
+
+        # Backfill grants that predate a completed migration. This makes the
+        # renewal notice work for patients transferred before this rule shipped.
+        for consent, _patient in rows:
+            if consent.status != ConsentStatus.ACTIVE.value:
+                continue
+            completed_after_grant = await self.session.scalar(
+                select(TransferRequest.id)
+                .where(
+                    TransferRequest.health_id == consent.health_id,
+                    TransferRequest.state == "COMPLETED",
+                    TransferRequest.created_at > consent.created_at,
+                )
+                .limit(1)
+            )
+            if completed_after_grant is not None:
+                consent.status = ConsentStatus.REVOKED.value
+                consent.revoked_at = moment
+                consent.reason = (
+                    "REPOSITORY_CHANGED: The patient's repository changed after "
+                    "this consent was granted. The patient must grant consent again."
+                )
+
+        await self.session.flush()
+        return rows

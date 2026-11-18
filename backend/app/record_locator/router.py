@@ -46,14 +46,10 @@ async def _authorize_location_read(health_id: str, user: dict, session: AsyncSes
         return
 
     subject = str(user.get("sub", ""))
-    if Role.PATIENT.value in roles:
-        patient = await session.scalar(
-            select(PatientIdentity).where(PatientIdentity.owner_subject == subject)
-        )
-        if patient is not None and patient.display_health_id == health_id:
-            return
-        raise HTTPException(status_code=403, detail="Patients can only view their own repository assignment")
 
+    # Some newly provisioned Keycloak users may inherit the PATIENT realm
+    # default role in addition to PROVIDER. Check the provider identity first
+    # so the patient-only ownership rule cannot shadow a valid provider grant.
     if Role.PROVIDER.value in roles:
         provider = await session.scalar(
             select(Provider).where(
@@ -74,8 +70,38 @@ async def _authorize_location_read(health_id: str, user: dict, session: AsyncSes
                 ).limit(1)
             )
             if consent is not None:
+                location = await RecordLocatorService(session).get_current_location(health_id)
+                if location is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="No current repository is assigned to this patient",
+                    )
+                repository = await session.get(Repository, location.repository_id)
+                if repository is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="The patient's current repository is not registered",
+                    )
+                if repository.jurisdiction.strip().upper() != provider.jurisdiction.strip().upper():
+                    raise HTTPException(
+                        status_code=403,
+                        detail=(
+                            "Access denied: same-jurisdiction access only. "
+                            f"The patient's current repository is in {repository.jurisdiction}, "
+                            f"but this provider is registered in {provider.jurisdiction}. "
+                            "Patient consent alone cannot override this restriction."
+                        ),
+                    )
                 return
         raise HTTPException(status_code=403, detail="Active patient consent is required to view this repository assignment")
+
+    if Role.PATIENT.value in roles:
+        patient = await session.scalar(
+            select(PatientIdentity).where(PatientIdentity.owner_subject == subject)
+        )
+        if patient is not None and patient.display_health_id == health_id:
+            return
+        raise HTTPException(status_code=403, detail="Patients can only view their own repository assignment")
 
     raise HTTPException(status_code=403, detail="Role is not permitted to view repository assignments")
 

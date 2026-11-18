@@ -5,11 +5,12 @@ import { useEffect, useState } from "react";
 import { api, type MedicalImportResult, type Provider, type Repository, type RepositorySummary, type Transfer } from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
-type AdminTab = "overview" | "repositories" | "transfers" | "providers" | "imports";
+type AdminTab = "overview" | "repositories" | "integrations" | "transfers" | "providers" | "imports";
 
 const tabs: { id: AdminTab; label: string }[] = [
   { id: "overview", label: "Overview" },
-  { id: "repositories", label: "Repositories" },
+  { id: "repositories", label: "Primary Repositories" },
+  { id: "integrations", label: "Repository Integrations" },
   { id: "transfers", label: "Transfer Requests" },
   { id: "providers", label: "Provider Registry" },
   { id: "imports", label: "Medical Records Import" },
@@ -117,6 +118,10 @@ export default function AdminPortal() {
     return repos.find((repository) => repository.id === id)?.name ?? "Repository details unavailable";
   }
 
+  // IN-KA and IN-OD are the two primary state repositories for the current
+  // Karnataka–Odisha deployment. Other configured destinations are integrations.
+  const primaryRepositories = repoSummaries.filter((repository) => ["IN-KA", "IN-OD"].includes(repository.code));
+  const repositoryIntegrations = repoSummaries.filter((repository) => !["IN-KA", "IN-OD"].includes(repository.code));
   const activePatients = repoSummaries.reduce((total, repository) => total + repository.active_patient_count, 0);
   const pendingTransfers = adminTransfers.filter((item) => !["COMPLETED", "REJECTED", "FAILED"].includes(item.state)).length;
   const completedTransfers = adminTransfers.filter((item) => item.state === "COMPLETED").length;
@@ -161,9 +166,10 @@ export default function AdminPortal() {
               </div>
             ))}
           </div>
-          <Card title="Patient distribution by repository">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {repoSummaries.map((repository) => (
+          <Card title="Primary repository distribution">
+            <p className="mb-4 text-sm text-slate-600">The current deployment's two primary state repositories. Patient assignments are counted from the active HealthNet record locator.</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              {primaryRepositories.map((repository) => (
                 <div key={repository.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div><p className="font-bold text-slate-950">{repository.name}</p><p className="mt-1 text-xs text-slate-600">{repository.code} · {repository.jurisdiction}</p></div>
@@ -173,8 +179,21 @@ export default function AdminPortal() {
                   <p className="text-xs font-medium text-slate-600">Patients currently assigned</p>
                 </div>
               ))}
-              {repoSummaries.length === 0 && <p className="text-sm text-slate-600">Repository summary is not available yet.</p>}
+              {primaryRepositories.length === 0 && <p className="text-sm text-slate-600">No primary repositories are configured.</p>}
             </div>
+          </Card>
+          <Card title="Additional repository integrations">
+            <p className="mb-3 text-sm text-slate-600">These are separately configured destinations or integration endpoints. They are retained for compatibility and future expansion; they are not counted as primary state repositories.</p>
+            {repositoryIntegrations.length === 0 ? <p className="text-sm text-slate-600">No additional integrations are configured.</p> : (
+              <div className="space-y-2">
+                {repositoryIntegrations.map((repository) => (
+                  <div key={repository.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3">
+                    <div><p className="font-semibold text-slate-950">{repository.name}</p><p className="text-xs text-slate-600">{repository.code} · {repository.jurisdiction}</p></div>
+                    <div className="text-right"><span className={`rounded-full px-2 py-1 text-xs font-bold ${repository.status === "ONLINE" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{repository.status}</span><p className="mt-1 text-xs text-slate-500">{repository.active_patient_count} active patients</p></div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
           <Card title="Latest transfer activity">
             {adminTransfers.length === 0 ? <p className="text-sm text-slate-600">No repository transfer requests found.</p> : (
@@ -193,24 +212,50 @@ export default function AdminPortal() {
       )}
 
       {activeTab === "repositories" && (
-        <Card title="Repository registry and patient distribution">
-          <p className="mb-4 text-sm text-slate-600">Patient counts are based on distinct Health IDs whose Record Locator currently marks this repository as ACTIVE. Historical/inactive assignments are not counted.</p>
-          <div className="space-y-3">
-            {repoSummaries.map((repository) => (
-              <div key={repository.id} className="rounded-xl border border-slate-200 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div><h3 className="font-bold text-slate-950">{repository.name}</h3><p className="mt-1 text-xs text-slate-600">{repository.code} · {repository.jurisdiction}</p></div>
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">{repository.status}</span>
+        <Card title="Primary repository registry">
+          <p className="mb-4 text-sm text-slate-600">Primary repositories for the current Karnataka–Odisha deployment. Patient counts are based on active HealthNet record-locator assignments.</p>
+          {primaryRepositories.length === 0 ? <p className="text-sm text-slate-600">No primary repositories are configured.</p> : (
+            <div className="space-y-3">
+              {primaryRepositories.map((repository) => (
+                <div key={repository.id} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div><h3 className="font-bold text-slate-950">{repository.name}</h3><p className="mt-1 text-xs text-slate-600">{repository.code} · {repository.jurisdiction}</p></div>
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">{repository.status}</span>
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Active patients</p><p className="text-2xl font-bold tabular-nums text-slate-950">{repository.active_patient_count}</p></div>
+                    <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Jurisdiction</p><p className="mt-1 font-bold text-slate-900">{repository.jurisdiction}</p></div>
+                  </div>
+                  <p className="mt-3 break-all text-xs text-slate-600">FHIR endpoint: {repository.base_url}</p>
+                  {repository.description && <p className="mt-1 text-sm text-slate-600">{repository.description}</p>}
                 </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Active patients</p><p className="text-2xl font-bold tabular-nums text-slate-950">{repository.active_patient_count}</p></div>
-                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Jurisdiction</p><p className="mt-1 font-bold text-slate-900">{repository.jurisdiction}</p></div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {activeTab === "integrations" && (
+        <Card title="Additional repository integrations">
+          <p className="mb-4 text-sm text-slate-600">These configured destinations are kept separate from the primary state repositories. Their presence in this list does not by itself confirm that their FHIR endpoint is reachable; use the configured status and endpoint details for operational verification.</p>
+          {repositoryIntegrations.length === 0 ? <p className="text-sm text-slate-600">No additional integrations are configured.</p> : (
+            <div className="space-y-3">
+              {repositoryIntegrations.map((repository) => (
+                <div key={repository.id} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div><h3 className="font-bold text-slate-950">{repository.name}</h3><p className="mt-1 text-xs text-slate-600">{repository.code} · {repository.jurisdiction}</p></div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${repository.status === "ONLINE" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>{repository.status}</span>
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Active patients</p><p className="text-2xl font-bold tabular-nums text-slate-950">{repository.active_patient_count}</p></div>
+                    <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Jurisdiction</p><p className="mt-1 font-bold text-slate-900">{repository.jurisdiction}</p></div>
+                  </div>
+                  <p className="mt-3 break-all text-xs text-slate-600">Configured FHIR endpoint: {repository.base_url}</p>
+                  {repository.description && <p className="mt-1 text-sm text-slate-600">{repository.description}</p>}
                 </div>
-                <p className="mt-3 break-all text-xs text-slate-600">FHIR endpoint: {repository.base_url}</p>
-                {repository.description && <p className="mt-1 text-sm text-slate-600">{repository.description}</p>}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
       )}
 
@@ -288,7 +333,11 @@ export default function AdminPortal() {
           <div className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs text-slate-700">
             Required columns: <strong>health_id, record_type, record_id, display, recorded_at</strong>. Optional: code, code_system, status, value, unit, source_hospital, is_chronic, emergency_relevant. Dates must use ISO format (YYYY-MM-DD or ISO datetime). Max 5,000 rows / 10 MB.
             <p className="mt-2">Only mark a condition for the emergency summary when both is_chronic and emergency_relevant are TRUE. Do not upload real patient data to an unsecured demo environment.</p>
-            <a className="mt-2 inline-block font-semibold underline" href="/medical-record-import-template.csv" download>Download CSV template</a>
+            <div className="mt-3 flex flex-wrap gap-4">
+              <a className="inline-block font-semibold underline" href="/medical-record-import-template.csv" download>Download blank/example CSV template</a>
+              <a className="inline-block font-semibold underline" href="/demo-medical-records.csv" download>Download seeded demo patient records</a>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">The seeded demo file is generated by backend/scripts/seed_demo_patients.py and contains Health IDs for testpatient1–testpatient4. Run the local demo seeding script first.</p>
           </div>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
             <input type="file" accept=".csv,.xlsx,.xlsm" onChange={(event) => { setImportFile(event.target.files?.[0] ?? null); setImportResult(null); }} className="block w-full text-sm text-slate-800" />

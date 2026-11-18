@@ -20,8 +20,24 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     const body = await response.text();
     let message = body || "HTTP " + response.status;
     try {
-      const parsed = JSON.parse(body) as { detail?: string };
-      if (parsed.detail) message = parsed.detail;
+      const parsed = JSON.parse(body) as { detail?: unknown; message?: unknown; error?: unknown };
+      const detail = parsed.detail ?? parsed.message ?? parsed.error;
+      if (typeof detail === "string") {
+        message = detail;
+      } else if (Array.isArray(detail)) {
+        message = detail.map((item) => {
+          if (item && typeof item === "object") {
+            const entry = item as { loc?: unknown[]; msg?: unknown };
+            const field = Array.isArray(entry.loc) ? entry.loc.filter((part) => part !== "body").join(".") : "";
+            const description = typeof entry.msg === "string" ? entry.msg : JSON.stringify(item);
+            return field ? `${field}: ${description}` : description;
+          }
+          return String(item);
+        }).join("; ");
+      } else if (detail && typeof detail === "object") {
+        const entry = detail as { msg?: unknown; message?: unknown; error?: unknown };
+        message = String(entry.msg ?? entry.message ?? entry.error ?? JSON.stringify(detail));
+      }
     } catch {}
     throw new Error(message);
   }
@@ -59,7 +75,7 @@ export interface Consent {
 }
 export interface AuthorizedPatient {
   health_id: string; given_name: string; family_name: string; consent_id: string; purpose: string;
-  scopes: string[]; valid_from: string; valid_until?: string;
+  scopes: string[]; valid_from: string; valid_until?: string; status?: string; reason?: string;
 }
 export interface Provider {
   id: string; external_id: string; given_name: string; family_name: string; license_number: string;
@@ -112,6 +128,7 @@ export const api = {
   revokeConsent: (id: string) => request<Consent>("/consent/consents/" + encodeURIComponent(id), { method: "DELETE" }),
   consents: (healthId: string) => request<Consent[]>("/consent/patients/" + encodeURIComponent(healthId) + "/consents"),
   authorizedPatients: () => request<AuthorizedPatient[]>("/consent/authorized-patients"),
+  dismissProviderNotice: (id: string) => request<{ dismissed: boolean }>("/consent/provider-notices/" + encodeURIComponent(id) + "/dismiss", { method: "POST" }),
   providers: () => request<Provider[]>("/provider-trust/providers"),
   onboardProvider: (body: { username:string; email:string; initial_password:string; given_name:string; family_name:string; license_number:string; jurisdiction:string }) =>
     request<{ provider:Provider; username:string; message:string }>("/provider-trust/providers/onboard",{method:"POST",body:JSON.stringify(body)}),

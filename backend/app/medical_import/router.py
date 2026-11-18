@@ -37,8 +37,6 @@ router = APIRouter(tags=["Medical Record Import"])
 UPLOAD_FILE = File(...)
 
 
-def require_admin():
-    return require_role(Role.ADMIN)
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_ROWS = 5000
 REQUIRED_COLUMNS = {"health_id", "record_type", "record_id", "display", "recorded_at"}
@@ -168,7 +166,7 @@ async def _add_emergency_condition(session: AsyncSession, health_id: str, displa
 @router.post("/imports/csv-excel")
 async def import_csv_excel(
     file: UploadFile = UPLOAD_FILE,
-    user: dict = Depends(require_admin),
+    user: dict = Depends(require_role(Role.ADMIN)),
     session: AsyncSession = Depends(get_db),
 ):
     content = await file.read(MAX_UPLOAD_BYTES + 1)

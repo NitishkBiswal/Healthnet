@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { api, type AuthorizedPatient, type Principal } from "@/lib/api";
@@ -14,7 +13,53 @@ export default function DoctorPortal() {
   const [scope, setScope] = useState("clinical");
   const [error, setError] = useState("");
   const [authorized, setAuthorized] = useState<AuthorizedPatient[]>([]);
+  const [dismissing, setDismissing] = useState<string | null>(null);
   const [principal, setPrincipal] = useState<Principal | null>(null);
+  const [dismissedConsents, setDismissedConsents] = useState<string[]>([]);
+  const [dismissalsLoaded, setDismissalsLoaded] = useState(false);
+
+  // This is a provider-specific dashboard preference. Dismissing a notice
+  // never changes the consent record or its audit history.
+  useEffect(() => {
+    if (!principal?.subject) {
+      setDismissedConsents([]);
+      setDismissalsLoaded(false);
+      return;
+    }
+
+    const key = `healthnet:dismissed-consents:${principal.subject}`;
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) ?? "[]");
+      setDismissedConsents(
+        Array.isArray(saved)
+          ? saved.filter((id): id is string => typeof id === "string")
+          : [],
+      );
+    } catch {
+      setDismissedConsents([]);
+    } finally {
+      setDismissalsLoaded(true);
+    }
+  }, [principal?.subject]);
+
+  function dismissRepositoryNotice(consentId: string) {
+    if (!principal?.subject || !dismissalsLoaded) return;
+
+    const next = [...new Set([...dismissedConsents, consentId])];
+    const key = `healthnet:dismissed-consents:${principal.subject}`;
+    try {
+      localStorage.setItem(key, JSON.stringify(next));
+      setDismissedConsents(next);
+    } catch {
+      setError("Could not save this dashboard preference. Check your browser storage settings.");
+    }
+  }
+
+  const visibleAuthorized = authorized.filter(
+    (patient) =>
+      patient.status !== "REVOKED" ||
+      !dismissedConsents.includes(patient.consent_id),
+  );
 
   async function loadPrincipal() {
     try {
@@ -37,6 +82,19 @@ export default function DoctorPortal() {
     void loadAuthorized();
   }, []);
 
+  async function dismissNotice(consentId: string) {
+    setError("");
+    setDismissing(consentId);
+    try {
+      await api.dismissProviderNotice(consentId);
+      setAuthorized((items) => items.filter((item) => item.consent_id !== consentId));
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to dismiss notice");
+    } finally {
+      setDismissing(null);
+    }
+  }
+
   function openLongitudinalView() {
     setError("");
     if (!healthId) {
@@ -54,12 +112,6 @@ export default function DoctorPortal() {
       title="Doctor Portal"
       description="Review patients who have granted you access and open their clinical history when needed."
     >
-      <div className="mb-5">
-        <Card title="Hospital integration demo">
-          <p className="text-sm text-slate-700">Simulate a trusted hospital submitting an Observation, Encounter, or Condition. HealthNet will route it to the patient's currently assigned repository.</p>
-          <Link href="/hospital" className="mt-3 inline-block rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">Open record submission workspace</Link>
-        </Card>
-      </div>
       <div className="space-y-5">
         <Card title="Your HealthNet Provider ID">
           <p className="text-sm text-slate-700">
@@ -77,7 +129,7 @@ export default function DoctorPortal() {
         </Card>
 
         <Card title="Patients who have granted you access">
-          {authorized.length === 0 ? (
+          {visibleAuthorized.length === 0 ? (
             <div className="rounded-lg bg-slate-50 p-4">
               <p className="text-sm font-medium text-slate-700">
                 No patients have currently granted you access.
@@ -85,8 +137,51 @@ export default function DoctorPortal() {
             </div>
           ) : (
             <div className="space-y-3">
-              {authorized.map((patient) => {
+              {visibleAuthorized.map((patient) => {
                 const selected = healthId === patient.health_id;
+                const needsRenewal = patient.status === "REVOKED";
+                if (needsRenewal) {
+                  return (
+                    <div
+                      key={patient.consent_id}
+                      className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-base font-bold text-slate-950">
+                          {patient.given_name} {patient.family_name}
+                        </span>
+                        <span className="rounded-full bg-white px-3 py-1 font-mono text-xs font-bold text-slate-700">
+                          {patient.health_id}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-bold text-amber-900">
+                          Patient repository changed
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => dismissRepositoryNotice(patient.consent_id)}
+                          disabled={!dismissalsLoaded}
+                          aria-label={`Remove outdated notice for ${patient.given_name} ${patient.family_name}`}
+                          className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-bold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          Remove from list
+                        </button>
+                      </div>
+                      <p className="mt-1 text-sm text-amber-900">
+                        This patient's records have moved to a different healthcare repository. Your previous consent was revoked for the transfer. Ask the patient to grant consent again before opening their updated medical records.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void dismissNotice(patient.consent_id)}
+                        disabled={dismissing === patient.consent_id}
+                        className="mt-3 rounded-lg border border-amber-500 bg-white px-3 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+                      >
+                        {dismissing === patient.consent_id ? "Dismissing..." : "Dismiss notice"}
+                      </button>
+                    </div>
+                  );
+                }
                 return (
                   <button
                     key={patient.consent_id}

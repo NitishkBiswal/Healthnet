@@ -389,9 +389,18 @@ function DoctorLongitudinalViewContent() {
               )}
             </div>
             {errors.length > 0 && (
-              <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                <p className="font-bold">Some information could not be loaded.</p>
-                <p className="mt-1">The available clinical records are shown above.</p>
+              <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+                <p className="font-bold">Clinical records could not be fully loaded.</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {errors.map((message, index) => (
+                    <li key={index}>{message}</li>
+                  ))}
+                </ul>
+                {view?.completeness === "UNAVAILABLE" && (
+                  <p className="mt-2 font-semibold">
+                    No clinical records were returned because access to the current repository is unavailable under the applicable access rules.
+                  </p>
+                )}
               </div>
             )}
           </Card>
