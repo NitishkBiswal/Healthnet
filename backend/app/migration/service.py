@@ -164,7 +164,7 @@ class MigrationService:
                     TransferRequest.state == MigrationState.COMPLETED.value,
                 )
             ) or 0
-            review.completed_transfer_count = int(count)
+            setattr(review, "completed_transfer_count", int(count))
         return reviews
 
     async def authorize_transfer(
