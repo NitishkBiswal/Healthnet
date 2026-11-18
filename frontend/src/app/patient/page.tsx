@@ -232,8 +232,9 @@ export default function PatientPortal() {
             <p className="text-sm text-slate-600">You have not registered a Health ID yet. Use <strong>Get my Health ID</strong> above.</p>
           )}
         </Card>
+      </div>}
 
-        {activeTab === "consents" && <Card title="Grant & revoke doctor access">
+      {activeTab === "consents" && <Card title="Grant & revoke doctor access">
           {patient && (
             <div className="mb-5 rounded-xl border border-cyan-200 bg-cyan-50 p-4">
               <h3 className="font-bold text-slate-950">Grant a doctor access</h3>
