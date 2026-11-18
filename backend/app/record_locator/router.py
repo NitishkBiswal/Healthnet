@@ -70,6 +70,28 @@ async def _authorize_location_read(health_id: str, user: dict, session: AsyncSes
                 ).limit(1)
             )
             if consent is not None:
+                location = await RecordLocatorService(session).get_current_location(health_id)
+                if location is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="No current repository is assigned to this patient",
+                    )
+                repository = await session.get(Repository, location.repository_id)
+                if repository is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="The patient's current repository is not registered",
+                    )
+                if repository.jurisdiction.strip().upper() != provider.jurisdiction.strip().upper():
+                    raise HTTPException(
+                        status_code=403,
+                        detail=(
+                            "Access denied: same-jurisdiction access only. "
+                            f"The patient's current repository is in {repository.jurisdiction}, "
+                            f"but this provider is registered in {provider.jurisdiction}. "
+                            "Patient consent alone cannot override this restriction."
+                        ),
+                    )
                 return
         raise HTTPException(status_code=403, detail="Active patient consent is required to view this repository assignment")
 
