@@ -10,6 +10,8 @@ from app.migration.schemas import (
     TransferManifestResponse,
     TransferRequestCreate,
     TransferStatus,
+    PatientTransferCreate,
+    TransferReviewDecision,
 )
 from app.migration.service import MigrationService
 from app.security.dependencies import get_current_user
@@ -25,6 +27,12 @@ async def require_admin_or_system(user: dict = Depends(get_current_user)) -> dic
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin or system role required",
         )
+    return user
+
+
+async def require_auditor(user: dict = Depends(get_current_user)) -> dict:
+    if Role.AUDITOR.value not in user.get("roles", []):
+        raise HTTPException(status_code=403, detail="Role AUDITOR required")
     return user
 
 
@@ -47,6 +55,51 @@ async def create_transfer_request(
     try:
         item = await MigrationService(session).initiate_transfer(
             request, str(user.get("sub", "unknown"))
+        )
+        response = TransferStatus.model_validate(item)
+        await session.commit()
+        return response
+    except ValueError as exc:
+        await session.rollback()
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/my-transfers", response_model=TransferStatus, status_code=status.HTTP_201_CREATED)
+async def create_my_transfer(
+    request: PatientTransferCreate,
+    user: dict = Depends(require_patient),
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await MigrationService(session).create_patient_transfer(
+            request, str(user.get("sub", "unknown"))
+        )
+        response = TransferStatus.model_validate(item)
+        await session.commit()
+        return response
+    except ValueError as exc:
+        await session.rollback()
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/auditor/reviews", response_model=list[TransferStatus])
+async def pending_transfer_reviews(
+    _: dict = Depends(require_auditor),
+    session: AsyncSession = Depends(get_db),
+):
+    return await MigrationService(session).pending_transfer_reviews()
+
+
+@router.post("/auditor/reviews/{transfer_id}", response_model=TransferStatus)
+async def decide_transfer_review(
+    transfer_id: UUID,
+    decision: TransferReviewDecision,
+    user: dict = Depends(require_auditor),
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await MigrationService(session).review_transfer(
+            transfer_id, str(user.get("sub", "unknown")), decision.decision, decision.reviewer_note
         )
         response = TransferStatus.model_validate(item)
         await session.commit()
