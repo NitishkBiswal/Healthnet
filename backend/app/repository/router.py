@@ -2,7 +2,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.repository.schemas import CustodyCreate, CustodyResponse, RepositoryCreate, RepositoryInfo, RepositoryStatus
+from app.repository.schemas import CustodyCreate, CustodyResponse, RepositoryCreate, RepositoryInfo, RepositorySummary, RepositoryStatus
 from app.repository.service import RepositoryService
 from app.security.dependencies import require_role
 from app.security.rbac import Role
@@ -17,6 +17,10 @@ async def create_repository(request: RepositoryCreate, _: dict = Depends(require
 @router.get("/repositories", response_model=list[RepositoryInfo])
 async def list_repositories(_: dict = Depends(require_admin), session: AsyncSession = Depends(get_db)):
     return [RepositoryInfo.model_validate(x) for x in await RepositoryService(session).list_repositories()]
+@router.get("/repositories/summary", response_model=list[RepositorySummary])
+async def list_repository_summaries(_: dict = Depends(require_admin), session: AsyncSession = Depends(get_db)):
+    return await RepositoryService(session).list_repository_summaries()
+
 @router.get("/repositories/{repository_id}", response_model=RepositoryInfo)
 async def get_repository(repository_id: UUID, _: dict = Depends(require_admin), session: AsyncSession = Depends(get_db)):
     item = await RepositoryService(session).get_repository(repository_id)
