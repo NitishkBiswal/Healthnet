@@ -136,6 +136,9 @@ async def authorized_patients(
     rows = await ConsentService(session).get_authorized_patients(
         user.get("sub", "")
     )
+    # Persist any stale grants revoked because a completed repository migration
+    # occurred after the original consent was issued.
+    await session.commit()
     return [
         AuthorizedPatientResponse(
             health_id=patient.display_health_id,
