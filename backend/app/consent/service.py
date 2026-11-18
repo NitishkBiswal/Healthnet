@@ -8,6 +8,7 @@ from app.consent.models import Consent
 from app.consent.schemas import ConsentCreateRequest, ConsentStatus
 from app.identity.models import PatientIdentity
 from app.provider_trust.models import Provider
+from app.migration.models import TransferRequest
 
 
 class ConsentService:
@@ -115,4 +116,29 @@ class ConsentService:
             )
             .order_by(PatientIdentity.family_name, PatientIdentity.given_name)
         )
-        return list(result.all())
+        rows = list(result.all())
+
+        # Backfill grants that predate a completed migration. This makes the
+        # renewal notice work for patients transferred before this rule shipped.
+        for consent, _patient in rows:
+            if consent.status != ConsentStatus.ACTIVE.value:
+                continue
+            completed_after_grant = await self.session.scalar(
+                select(TransferRequest.id)
+                .where(
+                    TransferRequest.health_id == consent.health_id,
+                    TransferRequest.state == "COMPLETED",
+                    TransferRequest.created_at > consent.created_at,
+                )
+                .limit(1)
+            )
+            if completed_after_grant is not None:
+                consent.status = ConsentStatus.REVOKED.value
+                consent.revoked_at = moment
+                consent.reason = (
+                    "REPOSITORY_CHANGED: The patient's repository changed after "
+                    "this consent was granted. The patient must grant consent again."
+                )
+
+        await self.session.flush()
+        return rows
