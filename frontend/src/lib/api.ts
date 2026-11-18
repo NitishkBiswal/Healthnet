@@ -52,6 +52,7 @@ export interface DuplicateReview {
 }
 export interface ProfileUpdateResult { outcome: "UPDATED" | "PENDING_REVIEW"; patient?: Patient; duplicate_review_id?: string; }
 export interface Repository { id: string; code: string; name: string; jurisdiction: string; base_url: string; status: string; description?: string; }
+export interface RepositorySummary extends Repository { active_patient_count: number; }
 export interface Consent {
   id: string; health_id: string; grantee_type: string; grantee_id: string; purpose: string; scopes: string[];
   status: string; valid_from: string; valid_until?: string; revoked_at?: string; reason?: string;
@@ -121,6 +122,7 @@ export const api = {
   longitudinal: (healthId: string, purpose = "TREATMENT", scope = "clinical") =>
     request<Record<string, unknown>>("/longitudinal/patients/longitudinal-view", { method: "POST", body: JSON.stringify({ health_id: healthId, purpose, scope }) }),
   repositories: () => request<Repository[]>("/repository/repositories"),
+  repositorySummaries: () => request<RepositorySummary[]>("/repository/repositories/summary"),
   currentRecordLocation: (healthId: string) => request<CurrentRecordLocation>("/record-locator/patients/" + encodeURIComponent(healthId) + "/current"),
   submitPatientRecord: (healthId: string, resource: Record<string, unknown>) =>
     request<{ accepted: boolean; health_id: string; repository_code: string; resource_type: string; resource_id: string; message: string }>(
