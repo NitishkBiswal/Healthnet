@@ -295,7 +295,10 @@ export default function AdminPortal() {
 
       <div className="mt-5">
         <Card title="Patient-initiated repository transfer queue">
-          <p className="mb-3 text-sm text-slate-600">Transfers authorized by patients appear here. If Auditor review was triggered, the transfer cannot be executed until it is approved.</p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-slate-600">Transfers authorized by patients appear here. If Auditor review was triggered, the transfer cannot be executed until it is approved.</p>
+            <button type="button" onClick={() => void loadAdminTransfers()} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Refresh queue</button>
+          </div>
           {adminTransfers.length === 0 ? <p className="text-sm text-slate-600">No pending repository transfers.</p> : (
             <div className="space-y-3">
               {adminTransfers.map((item) => (
