@@ -19,6 +19,7 @@ from app.identity.schemas import (
     LocationHistoryRequest,
     MatchCandidate,
     PatientRegistrationRequest,
+    PatientProfileUpdate,
     PatientResponse,
     RegistrationResult,
 )
@@ -165,6 +166,51 @@ async def get_my_patient(
     return PatientResponse.model_validate(patient)
 
 
+
+
+@router.put("/me/profile", response_model=PatientResponse)
+async def update_my_profile(
+    request: PatientProfileUpdate,
+    user: dict = Depends(require_patient),
+    session: AsyncSession = Depends(get_db),
+) -> PatientResponse:
+    subject = str(user.get("sub"))
+    patient = await session.scalar(
+        select(PatientIdentity).where(PatientIdentity.owner_subject == subject)
+    )
+    if patient is None:
+        approved_review = await session.scalar(
+            select(DuplicateReview)
+            .where(
+                DuplicateReview.requesting_subject == subject,
+                DuplicateReview.status == "APPROVED_DUPLICATE",
+            )
+            .order_by(DuplicateReview.reviewed_at.desc())
+        )
+        if approved_review is not None:
+            patient = await session.get(PatientIdentity, approved_review.candidate_patient_id)
+    if patient is None:
+        raise HTTPException(status_code=404, detail="No Health ID is linked to this account")
+
+    patient.given_name = request.given_name.strip()
+    patient.family_name = request.family_name.strip()
+    patient.date_of_birth = request.date_of_birth
+    patient.sex = request.sex.strip() if request.sex and request.sex.strip() else None
+    patient.phone = request.phone.strip() if request.phone and request.phone.strip() else None
+    patient.email = request.email.strip() if request.email and request.email.strip() else None
+    patient.address = request.address.strip() if request.address and request.address.strip() else None
+    await AuditService(session).log_event(
+        AuditEventCreate(
+            event_type=AuditEventType.ACCESS,
+            health_id=patient.display_health_id,
+            actor_id=subject,
+            action="PATIENT_PROFILE_UPDATED",
+            payload={"fields": ["given_name", "family_name", "date_of_birth", "sex", "phone", "email", "address"]},
+        )
+    )
+    await session.commit()
+    await session.refresh(patient)
+    return PatientResponse.model_validate(patient)
 
 
 @router.get("/me/aadhaar", response_model=AadhaarStatusResponse)
