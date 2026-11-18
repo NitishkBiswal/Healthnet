@@ -22,9 +22,9 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import async_session_maker, close_db, init_db
+from app.identity.models import PatientIdentity
 from app.identity.schemas import PatientRegistrationRequest
 from app.identity.service import IdentityService
-from app.provider_trust.models import Provider
 from app.repository.models import Repository
 
 
@@ -96,6 +96,14 @@ async def ensure_keycloak_patient(client: httpx.AsyncClient, headers: dict[str, 
             raise RuntimeError(f"Keycloak did not return the newly created user {item['username']}")
         user_id = found[0]["id"]
 
+    reset_password = await client.put(
+        f"{base}/users/{user_id}/reset-password",
+        headers=headers,
+        json={"type": "password", "value": DEMO_PASSWORD, "temporary": False},
+    )
+    if reset_password.status_code not in (204, 409):
+        reset_password.raise_for_status()
+
     role_response = await client.get(f"{base}/roles/patient", headers=headers)
     role_response.raise_for_status()
     mapping = await client.post(
@@ -156,10 +164,7 @@ async def main() -> None:
             for item in PATIENTS:
                 subject = subjects[item["username"]]
                 patient = await session.scalar(
-                    select(__import__("app.identity.models", fromlist=["PatientIdentity"]).PatientIdentity)
-                    .where(
-                        __import__("app.identity.models", fromlist=["PatientIdentity"]).PatientIdentity.owner_subject == subject
-                    )
+                    select(PatientIdentity).where(PatientIdentity.owner_subject == subject)
                 )
                 if patient is None:
                     repository = await session.scalar(
