@@ -13,6 +13,7 @@ from app.longitudinal.schemas import (
     LongitudinalViewResponse,
 )
 from app.provider_trust.models import Provider
+from app.identity.models import DuplicateReview, PatientIdentity
 from app.record_locator.models import RecordLocator
 from app.repository.models import Repository, RepositoryStatus
 
@@ -26,6 +27,89 @@ class LongitudinalViewService:
 
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    async def build_patient_view(
+        self, user: dict[str, Any]
+    ) -> LongitudinalViewResponse:
+        """Return records only for the patient identity linked to this login."""
+        if "PATIENT" not in set(user.get("roles", [])):
+            raise LongitudinalAccessDenied("Patient role is required")
+        subject = str(user.get("sub") or "")
+        patient = await self.session.scalar(
+            select(PatientIdentity).where(PatientIdentity.owner_subject == subject)
+        )
+        if patient is None:
+            approved = await self.session.scalar(
+                select(DuplicateReview)
+                .where(
+                    DuplicateReview.requesting_subject == subject,
+                    DuplicateReview.status == "APPROVED_DUPLICATE",
+                )
+                .order_by(DuplicateReview.reviewed_at.desc())
+            )
+            if approved is not None:
+                patient = await self.session.get(PatientIdentity, approved.candidate_patient_id)
+        if patient is None:
+            raise LongitudinalAccessDenied("No Health ID is linked to this patient account")
+
+        health_id = patient.display_health_id
+        locator = await self.session.scalar(
+            select(RecordLocator)
+            .where(RecordLocator.health_id == health_id, RecordLocator.status == "ACTIVE")
+            .order_by(RecordLocator.created_at.desc())
+        )
+        if locator is None:
+            return LongitudinalViewResponse(
+                health_id=health_id, completeness=DataCompleteness.UNAVAILABLE,
+                current_repository=None, records=[], repositories_checked=0,
+                repositories_available=0,
+                errors=["No current repository is assigned to this patient"],
+            )
+        repository = await self.session.get(Repository, locator.repository_id)
+        if repository is None or repository.status == RepositoryStatus.OFFLINE:
+            return LongitudinalViewResponse(
+                health_id=health_id, completeness=DataCompleteness.UNAVAILABLE,
+                current_repository=None, records=[], repositories_checked=1,
+                repositories_available=0,
+                errors=["The patient's current repository is unavailable"],
+            )
+
+        current_repository = {
+            "code": repository.code, "name": repository.name,
+            "jurisdiction": repository.jurisdiction,
+            "endpoint": locator.endpoint or repository.base_url,
+        }
+        resource_types = [
+            value.strip() for value in locator.resource_types.split(",") if value.strip()
+        ] or ["Patient", "Condition", "Observation", "MedicationRequest"]
+        client = FHIRClient(locator.endpoint or repository.base_url)
+        records: list[dict[str, Any]] = []
+        errors: list[str] = []
+        for resource_type in resource_types:
+            try:
+                if resource_type == "Patient":
+                    bundle = await client.search(
+                        "Patient", {"identifier": f"urn:healthnet:health-id|{health_id}"}
+                    )
+                else:
+                    bundle = await client.search(resource_type, {"patient": health_id})
+                for entry in bundle.get("entry", []):
+                    resource = entry.get("resource") if isinstance(entry, dict) else None
+                    if isinstance(resource, dict):
+                        records.append({
+                            "repository": repository.code,
+                            "resource_type": resource_type,
+                            "resource": resource,
+                        })
+            except Exception as exc:
+                errors.append(f"{repository.code}/{resource_type}: {type(exc).__name__}")
+
+        return LongitudinalViewResponse(
+            health_id=health_id, current_repository=current_repository,
+            completeness=DataCompleteness.PARTIAL if errors else DataCompleteness.COMPLETE,
+            records=records, repositories_checked=1, repositories_available=1,
+            errors=errors,
+        )
 
     async def _authorize_doctor(
         self,
