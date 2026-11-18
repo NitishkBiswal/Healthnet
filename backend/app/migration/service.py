@@ -1,6 +1,7 @@
 import hashlib
 import json
 import secrets
+from typing import Any
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -15,7 +16,7 @@ from app.migration.models import (
     TransferManifest,
     TransferRequest,
 )
-from app.migration.schemas import MigrationState, PatientTransferCreate, TransferExecuteRequest, TransferRequestCreate
+from app.migration.schemas import MigrationState, PatientTransferCreate, TransferExecuteRequest, TransferRequestCreate, TransferStatus
 from app.record_locator.models import RecordLocator
 from app.identity.models import PatientIdentity
 from app.provenance.schemas import ProvenanceRecord
@@ -150,13 +151,14 @@ class MigrationService:
         await self.session.refresh(item)
         return item
 
-    async def pending_transfer_reviews(self) -> list[TransferRequest]:
+    async def pending_transfer_reviews(self) -> list[dict[str, Any]]:
         result = await self.session.scalars(
             select(TransferRequest)
             .where(TransferRequest.state == MigrationState.PENDING_AUDITOR_REVIEW.value)
             .order_by(TransferRequest.created_at.asc())
         )
         reviews = list(result.all())
+        response_items: list[dict[str, Any]] = []
         for review in reviews:
             count = await self.session.scalar(
                 select(func.count(TransferRequest.id)).where(
@@ -164,8 +166,10 @@ class MigrationService:
                     TransferRequest.state == MigrationState.COMPLETED.value,
                 )
             ) or 0
-            setattr(review, "completed_transfer_count", int(count))
-        return reviews
+            payload = TransferStatus.model_validate(review).model_dump()
+            payload["completed_transfer_count"] = int(count)
+            response_items.append(payload)
+        return response_items
 
     async def authorize_transfer(
         self, transfer_id: UUID, actor_id: str, authorization_reference: str
