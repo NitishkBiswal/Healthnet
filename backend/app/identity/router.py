@@ -20,6 +20,7 @@ from app.identity.schemas import (
     MatchCandidate,
     PatientRegistrationRequest,
     PatientProfileUpdate,
+    ProfileUpdateResult,
     PatientResponse,
     RegistrationResult,
 )
@@ -168,12 +169,12 @@ async def get_my_patient(
 
 
 
-@router.put("/me/profile", response_model=PatientResponse)
+@router.put("/me/profile", response_model=ProfileUpdateResult)
 async def update_my_profile(
     request: PatientProfileUpdate,
     user: dict = Depends(require_patient),
     session: AsyncSession = Depends(get_db),
-) -> PatientResponse:
+) -> ProfileUpdateResult:
     subject = str(user.get("sub"))
     patient = await session.scalar(
         select(PatientIdentity).where(PatientIdentity.owner_subject == subject)
@@ -184,6 +185,7 @@ async def update_my_profile(
             .where(
                 DuplicateReview.requesting_subject == subject,
                 DuplicateReview.status == "APPROVED_DUPLICATE",
+                DuplicateReview.review_type == "DUPLICATE_REGISTRATION",
             )
             .order_by(DuplicateReview.reviewed_at.desc())
         )
@@ -191,6 +193,51 @@ async def update_my_profile(
             patient = await session.get(PatientIdentity, approved_review.candidate_patient_id)
     if patient is None:
         raise HTTPException(status_code=404, detail="No Health ID is linked to this account")
+
+    match_request = PatientRegistrationRequest(
+        given_name=request.given_name,
+        family_name=request.family_name,
+        date_of_birth=request.date_of_birth,
+        sex=request.sex,
+        phone=request.phone,
+        email=request.email,
+        address=request.address,
+        issuing_jurisdiction=patient.issuing_jurisdiction,
+    )
+    matches = [
+        item for item in await IdentityService(session).match(match_request)
+        if item.patient.id != patient.id
+    ]
+    if matches:
+        candidate = matches[0]
+        review = DuplicateReview(
+            review_type="PROFILE_UPDATE",
+            target_patient_id=patient.id,
+            candidate_patient_id=candidate.patient.id,
+            requesting_subject=subject,
+            proposed_given_name=request.given_name.strip(),
+            proposed_family_name=request.family_name.strip(),
+            proposed_date_of_birth=request.date_of_birth,
+            proposed_sex=request.sex.strip() if request.sex and request.sex.strip() else None,
+            proposed_phone=request.phone.strip() if request.phone and request.phone.strip() else None,
+            proposed_email=request.email.strip() if request.email and request.email.strip() else None,
+            proposed_address=request.address.strip() if request.address and request.address.strip() else None,
+            proposed_issuing_jurisdiction=patient.issuing_jurisdiction,
+            confidence=candidate.confidence,
+        )
+        session.add(review)
+        await session.flush()
+        await AuditService(session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.ACCESS,
+                health_id=patient.display_health_id,
+                actor_id=subject,
+                action="PATIENT_PROFILE_UPDATE_SUBMITTED_FOR_REVIEW",
+                payload={"review_id": str(review.id), "candidate_health_id": candidate.patient.display_health_id},
+            )
+        )
+        await session.commit()
+        return ProfileUpdateResult(outcome="PENDING_REVIEW", duplicate_review_id=review.id)
 
     patient.given_name = request.given_name.strip()
     patient.family_name = request.family_name.strip()
@@ -210,7 +257,7 @@ async def update_my_profile(
     )
     await session.commit()
     await session.refresh(patient)
-    return PatientResponse.model_validate(patient)
+    return ProfileUpdateResult(outcome="UPDATED", patient=PatientResponse.model_validate(patient))
 
 
 @router.get("/me/aadhaar", response_model=AadhaarStatusResponse)
