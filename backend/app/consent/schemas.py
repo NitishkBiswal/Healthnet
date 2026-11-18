@@ -34,3 +34,5 @@ class AuthorizedPatientResponse(BaseModel):
     scopes: list[str]
     valid_from: datetime
     valid_until: datetime | None = None
+    status: ConsentStatus = ConsentStatus.ACTIVE
+    reason: str | None = None
