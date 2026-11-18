@@ -21,7 +21,7 @@ import httpx
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.core.database import async_session_maker, close_db, init_db
+from app.core import database
 from app.identity.models import PatientIdentity
 from app.identity.schemas import PatientRegistrationRequest
 from app.identity.service import IdentityService
@@ -156,11 +156,11 @@ async def main() -> None:
         for item in PATIENTS:
             subjects[item["username"]] = await ensure_keycloak_patient(client, headers, item)
 
-    await init_db()
-    assert async_session_maker is not None
+    await database.init_db()
+    assert database.async_session_maker is not None
     seeded: list[dict[str, str]] = []
     try:
-        async with async_session_maker() as session:
+        async with database.async_session_maker() as session:
             for item in PATIENTS:
                 subject = subjects[item["username"]]
                 patient = await session.scalar(
@@ -203,7 +203,7 @@ async def main() -> None:
                     "health_id": patient.display_health_id,
                 })
     finally:
-        await close_db()
+        await database.close_db()
 
     csv_path = write_demo_csv(seeded)
     print("\nHealthNet demo patients are ready:")
