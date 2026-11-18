@@ -469,6 +469,44 @@ class MigrationService:
         await self.session.refresh(manifest)
         return manifest
 
+    async def transfer_destinations(self, actor_id: str) -> list[Repository]:
+        patient = await self.session.scalar(
+            select(PatientIdentity).where(PatientIdentity.owner_subject == actor_id)
+        )
+        if patient is None:
+            raise ValueError("No registered patient identity is linked to this account")
+        current = await self.session.scalar(
+            select(RecordLocator).where(
+                RecordLocator.health_id == patient.display_health_id,
+                RecordLocator.status == "ACTIVE",
+            )
+        )
+        if current is None:
+            raise ValueError("Your Health ID has no active repository assignment")
+        result = await self.session.scalars(
+            select(Repository)
+            .where(
+                Repository.id != current.repository_id,
+                Repository.status != RepositoryStatus.OFFLINE,
+            )
+            .order_by(Repository.jurisdiction, Repository.name)
+        )
+        return list(result.all())
+
+    async def admin_transfers(self) -> list[TransferRequest]:
+        result = await self.session.scalars(
+            select(TransferRequest)
+            .where(
+                TransferRequest.state.not_in([
+                    MigrationState.COMPLETED.value,
+                    MigrationState.REJECTED.value,
+                ])
+            )
+            .order_by(TransferRequest.created_at.desc())
+            .limit(100)
+        )
+        return list(result.all())
+
     async def get_patient_transfers(self, actor_id: str) -> list[TransferRequest]:
         patient = await self.session.scalar(
             select(PatientIdentity).where(PatientIdentity.owner_subject == actor_id)
