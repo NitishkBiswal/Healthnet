@@ -146,6 +146,8 @@ async def authorized_patients(
             scopes=consent.scopes.split(",") if consent.scopes else [],
             valid_from=consent.valid_from,
             valid_until=consent.valid_until,
+            status=consent.status,
+            reason=consent.reason,
         )
         for consent, patient in rows
     ]
