@@ -4,7 +4,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.schemas import AuditEventCreate, AuditEventType
@@ -32,6 +32,16 @@ class MigrationService:
     async def initiate_transfer(
         self, request: TransferRequestCreate, actor_id: str
     ) -> TransferRequest:
+        if not request.reason.strip():
+            raise ValueError("A transfer reason is required")
+        pending = await self.session.scalar(
+            select(TransferRequest.id).where(
+                TransferRequest.health_id == request.health_id,
+                TransferRequest.state.not_in([MigrationState.COMPLETED.value, MigrationState.FAILED.value, MigrationState.REJECTED.value]),
+            ).limit(1)
+        )
+        if pending is not None:
+            raise ValueError("This patient already has a repository transfer in progress")
         if request.source_repository_id == request.destination_repository_id:
             raise ValueError("Source and destination repositories must differ")
 
@@ -70,6 +80,72 @@ class MigrationService:
         await self.session.refresh(item)
         return item
 
+    async def create_patient_transfer(
+        self, request: PatientTransferCreate, actor_id: str
+    ) -> TransferRequest:
+        patient = await self.session.scalar(
+            select(PatientIdentity).where(PatientIdentity.owner_subject == actor_id)
+        )
+        if patient is None:
+            raise ValueError("No registered patient identity is linked to this account")
+        current = await self.session.scalar(
+            select(RecordLocator).where(
+                RecordLocator.health_id == patient.display_health_id,
+                RecordLocator.status == "ACTIVE",
+            )
+        )
+        if current is None:
+            raise ValueError("Your Health ID has no active repository assignment")
+        completed_count = await self.session.scalar(
+            select(func.count(TransferRequest.id)).where(
+                TransferRequest.health_id == patient.display_health_id,
+                TransferRequest.state == MigrationState.COMPLETED.value,
+            )
+        ) or 0
+        create = TransferRequestCreate(
+            health_id=patient.display_health_id,
+            source_repository_id=current.repository_id,
+            destination_repository_id=request.destination_repository_id,
+            purpose="PATIENT_DIRECTED_REPOSITORY_MIGRATION",
+            scope="full",
+            reason=request.reason.strip(),
+        )
+        item = await self.initiate_transfer(create, actor_id)
+        # After two successful moves, every subsequent move requires an Auditor.
+        if completed_count >= 2:
+            item.review_required = True
+            item.review_status = "PENDING"
+        await self.session.flush()
+        await self.session.refresh(item)
+        return item
+
+    async def review_transfer(
+        self, transfer_id: UUID, actor_id: str, decision: str, reviewer_note: str | None
+    ) -> TransferRequest:
+        item = await self.session.get(TransferRequest, transfer_id)
+        if item is None or item.state != MigrationState.PENDING_AUDITOR_REVIEW.value:
+            raise ValueError("No pending Auditor review exists for this transfer")
+        item.reviewed_by = actor_id
+        item.reviewed_at = datetime.now(UTC)
+        item.reviewer_note = reviewer_note
+        if decision == "APPROVE":
+            item.review_status = "APPROVED"
+            item.state = MigrationState.PATIENT_AUTHORIZED.value
+        else:
+            item.review_status = "REJECTED"
+            item.state = MigrationState.REJECTED.value
+        await self.session.flush()
+        await self.session.refresh(item)
+        return item
+
+    async def pending_transfer_reviews(self) -> list[TransferRequest]:
+        result = await self.session.scalars(
+            select(TransferRequest)
+            .where(TransferRequest.state == MigrationState.PENDING_AUDITOR_REVIEW.value)
+            .order_by(TransferRequest.created_at.asc())
+        )
+        return list(result.all())
+
     async def authorize_transfer(
         self, transfer_id: UUID, actor_id: str, authorization_reference: str
     ) -> TransferRequest:
@@ -85,7 +161,7 @@ class MigrationService:
         if patient is None or patient.display_health_id != item.health_id:
             raise ValueError("Only the patient who owns this Health ID can authorize the transfer")
 
-        item.state = MigrationState.PATIENT_AUTHORIZED.value
+        item.state = MigrationState.PENDING_AUDITOR_REVIEW.value if item.review_required else MigrationState.PATIENT_AUTHORIZED.value
         item.authorization_reference = authorization_reference
         await self.session.flush()
         await self.session.refresh(item)
