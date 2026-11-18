@@ -88,6 +88,9 @@ class DuplicateReviewResponse(BaseModel):
 
     id: UUID
     candidate_patient_id: UUID
+    review_type: str = "DUPLICATE_REGISTRATION"
+    target_patient_id: UUID | None = None
+    proposed_address: str | None = None
     confidence: float
     status: str
     reviewer_note: str | None
@@ -104,7 +107,7 @@ class DuplicateReviewResponse(BaseModel):
 
 
 class DuplicateReviewDecision(BaseModel):
-    decision: str = Field(pattern="^(APPROVED_DUPLICATE|REJECTED)$")
+    decision: str = Field(pattern="^(APPROVED_DUPLICATE|APPROVED_PROFILE_UPDATE|REJECTED)$")
     reviewer_note: str | None = None
 
 
@@ -131,6 +134,12 @@ class PatientProfileUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=32)
     email: str | None = Field(default=None, max_length=320)
     address: str | None = None
+
+
+class ProfileUpdateResult(BaseModel):
+    outcome: str
+    patient: PatientResponse | None = None
+    duplicate_review_id: UUID | None = None
 
 
 class AadhaarUpdateRequest(BaseModel):
