@@ -87,6 +87,30 @@ export default function DoctorPortal() {
             <div className="space-y-3">
               {authorized.map((patient) => {
                 const selected = healthId === patient.health_id;
+                const needsRenewal = patient.status === "REVOKED";
+                if (needsRenewal) {
+                  return (
+                    <div
+                      key={patient.consent_id}
+                      className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-base font-bold text-slate-950">
+                          {patient.given_name} {patient.family_name}
+                        </span>
+                        <span className="rounded-full bg-white px-3 py-1 font-mono text-xs font-bold text-slate-700">
+                          {patient.health_id}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm font-bold text-amber-900">
+                        Patient repository changed
+                      </p>
+                      <p className="mt-1 text-sm text-amber-900">
+                        This patient's records have moved to a different healthcare repository. Your previous consent was revoked for the transfer. Ask the patient to grant consent again before opening their updated medical records.
+                      </p>
+                    </div>
+                  );
+                }
                 return (
                   <button
                     key={patient.consent_id}
@@ -120,7 +144,7 @@ export default function DoctorPortal() {
                     </p>
                   </button>
                 );
-              })}
+              })}}
             </div>
           )}
         </Card>
