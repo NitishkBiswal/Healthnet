@@ -10,3 +10,6 @@ GRANT ALL PRIVILEGES ON DATABASE hapi_fhir_db TO healthnet;
 
 CREATE DATABASE hapi_fhir_kolkata_db;
 GRANT ALL PRIVILEGES ON DATABASE hapi_fhir_kolkata_db TO healthnet;
+
+CREATE DATABASE hapi_fhir_karnataka_db;
+GRANT ALL PRIVILEGES ON DATABASE hapi_fhir_karnataka_db TO healthnet;
