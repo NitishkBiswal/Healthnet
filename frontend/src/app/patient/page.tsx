@@ -111,6 +111,27 @@ export default function PatientPortal() {
     } finally { setProfileSaving(false); }
   }
 
+  async function refreshRepositoryTransferData() {
+    if (!patient) return;
+    setMigrationMessage("");
+    try {
+      const [location, history, destinations, records] = await Promise.all([
+        api.currentRecordLocation(patient.display_health_id),
+        api.myTransfers(),
+        api.transferDestinations(),
+        api.myMedicalRecords(),
+      ]);
+      setCurrentLocation(location);
+      setTransfers(history);
+      setTransferDestinations(destinations);
+      setMedicalRecords(records);
+      setMedicalRecordsError("");
+      setMigrationMessage("Repository assignment, transfer history and medical records refreshed.");
+    } catch (reason: unknown) {
+      setMigrationMessage(reason instanceof Error ? reason.message : "Unable to refresh repository information.");
+    }
+  }
+
   async function requestRepositoryTransfer() {
     if (!transferDestination) {
       setMigrationMessage("Select a destination repository.");
@@ -193,7 +214,7 @@ export default function PatientPortal() {
       )}
 
       {patient && (
-        <nav aria-label="Patient portal tabs" className="mb-5 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        <nav aria-label="Patient portal tabs" className="mb-5 grid grid-cols-2 md:grid-cols-4 gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
           <button type="button" role="tab" aria-selected={activeTab === "profile"} onClick={() => setActiveTab("profile")} className={activeTab === "profile" ? "rounded-lg bg-slate-900 px-2 py-3 text-sm font-semibold text-white" : "rounded-lg px-2 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"}>Profile</button>
           <button type="button" role="tab" aria-selected={activeTab === "consents"} onClick={() => setActiveTab("consents")} className={activeTab === "consents" ? "rounded-lg bg-slate-900 px-2 py-3 text-sm font-semibold text-white" : "rounded-lg px-2 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"}>Grant & revoke consents</button>
           <button type="button" role="tab" aria-selected={activeTab === "records"} onClick={() => setActiveTab("records")} className={activeTab === "records" ? "rounded-lg bg-slate-900 px-2 py-3 text-sm font-semibold text-white" : "rounded-lg px-2 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"}>Medical records</button>
@@ -230,6 +251,9 @@ export default function PatientPortal() {
             {migrationMessage && <p role="status" className="mt-3 rounded-lg bg-cyan-50 p-3 text-sm font-semibold text-slate-800">{migrationMessage}</p>}
           </Card>
 
+          <div className="flex justify-end">
+            <button type="button" onClick={() => void refreshRepositoryTransferData()} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Refresh repository status</button>
+          </div>
           <Card title="Transfer history & approvals">
             {transfers.length === 0 ? <p className="text-sm text-slate-600">No repository transfers have been requested yet.</p> : (
               <div className="space-y-3">
