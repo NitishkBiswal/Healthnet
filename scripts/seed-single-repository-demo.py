@@ -29,6 +29,7 @@ from app.repository.models import EHRCustody, Repository
 HEALTH_ID = "INOD000100"
 FHIR_BASE = settings.HAPI_FHIR_BASE_URL.rstrip("/")
 KOLKATA_FHIR_BASE = os.getenv("KOLKATA_HAPI_FHIR_BASE_URL", "http://localhost:8091/fhir").rstrip("/")
+KARNATAKA_FHIR_BASE = os.getenv("KARNATAKA_HAPI_FHIR_BASE_URL", "http://localhost:8092/fhir").rstrip("/")
 PATIENT_NAME = ("Aarav", "Sharma")
 
 
@@ -102,6 +103,23 @@ async def seed_database(patient_subject: str, provider_subject: str) -> str:
         else:
             kolkata.base_url = KOLKATA_FHIR_BASE
             kolkata.description = "Demo destination repository backed by its own HAPI FHIR service and PostgreSQL database."
+
+        karnataka = await session.scalar(
+            select(Repository).where(Repository.code == "IN-KA-BLR-FHIR")
+        )
+        if karnataka is None:
+            karnataka = Repository(
+                code="IN-KA-BLR-FHIR",
+                name="Karnataka Health Records Repository",
+                jurisdiction="IN-KA",
+                base_url=KARNATAKA_FHIR_BASE,
+                description="Demo destination repository backed by its own Karnataka HAPI FHIR service and PostgreSQL database.",
+                status="ONLINE",
+            )
+            session.add(karnataka)
+        else:
+            karnataka.base_url = KARNATAKA_FHIR_BASE
+            karnataka.description = "Demo destination repository backed by its own Karnataka HAPI FHIR service and PostgreSQL database."
 
         jurisdiction = await session.scalar(
             select(Jurisdiction).where(Jurisdiction.code == "IN-OD")
@@ -290,10 +308,11 @@ async def main() -> None:
     print("Demo provider ID: PRV-IN-000001")
     print(f"Odisha FHIR endpoint: {FHIR_BASE}")
     print(f"Kolkata FHIR endpoint: {KOLKATA_FHIR_BASE}")
+    print(f"Karnataka FHIR endpoint: {KARNATAKA_FHIR_BASE}")
     print()
     print("The doctor retrieves this patient's records from the current repository only.")
     print("The Admin Portal can request a move to IN-WB-KOL-FHIR, then the patient authorizes it.")
-    print("Odisha and Kolkata use separate HAPI FHIR services and separate PostgreSQL databases.")
+    print("Odisha, Kolkata and Karnataka use separate HAPI FHIR services and separate PostgreSQL databases.")
 
 
 if __name__ == "__main__":
