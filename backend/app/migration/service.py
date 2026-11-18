@@ -147,6 +147,20 @@ class MigrationService:
         else:
             item.review_status = "REJECTED"
             item.state = MigrationState.REJECTED.value
+        await AuditService(self.session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.MIGRATION,
+                health_id=item.health_id,
+                actor_id=actor_id,
+                action="REPOSITORY_MIGRATION_AUDITOR_" + ("APPROVED" if decision == "APPROVE" else "REJECTED"),
+                payload={
+                    "transfer_id": str(item.id),
+                    "reason": item.reason,
+                    "reviewer_note": reviewer_note,
+                    "review_status": item.review_status,
+                },
+            )
+        )
         await self.session.flush()
         await self.session.refresh(item)
         return item
@@ -188,6 +202,19 @@ class MigrationService:
 
         item.state = MigrationState.PENDING_AUDITOR_REVIEW.value if item.review_required else MigrationState.PATIENT_AUTHORIZED.value
         item.authorization_reference = authorization_reference
+        await AuditService(self.session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.MIGRATION,
+                health_id=item.health_id,
+                actor_id=actor_id,
+                action="REPOSITORY_MIGRATION_PATIENT_AUTHORIZED",
+                payload={
+                    "transfer_id": str(item.id),
+                    "reason": item.reason,
+                    "auditor_review_required": item.review_required,
+                },
+            )
+        )
         await self.session.flush()
         await self.session.refresh(item)
         return item
