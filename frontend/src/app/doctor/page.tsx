@@ -14,6 +14,7 @@ export default function DoctorPortal() {
   const [scope, setScope] = useState("clinical");
   const [error, setError] = useState("");
   const [authorized, setAuthorized] = useState<AuthorizedPatient[]>([]);
+  const [dismissing, setDismissing] = useState<string | null>(null);
   const [principal, setPrincipal] = useState<Principal | null>(null);
 
   async function loadPrincipal() {
@@ -36,6 +37,19 @@ export default function DoctorPortal() {
     void loadPrincipal();
     void loadAuthorized();
   }, []);
+
+  async function dismissNotice(consentId: string) {
+    setError("");
+    setDismissing(consentId);
+    try {
+      await api.dismissProviderNotice(consentId);
+      setAuthorized((items) => items.filter((item) => item.consent_id !== consentId));
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to dismiss notice");
+    } finally {
+      setDismissing(null);
+    }
+  }
 
   function openLongitudinalView() {
     setError("");
@@ -108,6 +122,14 @@ export default function DoctorPortal() {
                       <p className="mt-1 text-sm text-amber-900">
                         This patient's records have moved to a different healthcare repository. Your previous consent was revoked for the transfer. Ask the patient to grant consent again before opening their updated medical records.
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => void dismissNotice(patient.consent_id)}
+                        disabled={dismissing === patient.consent_id}
+                        className="mt-3 rounded-lg border border-amber-500 bg-white px-3 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+                      >
+                        {dismissing === patient.consent_id ? "Dismissing..." : "Dismiss notice"}
+                      </button>
                     </div>
                   );
                 }
