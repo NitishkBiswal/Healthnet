@@ -44,7 +44,7 @@ export interface PatientRegistration {
 export interface MatchCandidate { patient_id: string; health_id: string; confidence: number; band: string; }
 export interface RegistrationResult { outcome: string; patient?: Patient; matches: MatchCandidate[]; duplicate_review_id?: string; }
 export interface DuplicateReview {
-  id: string; candidate_patient_id: string; review_type?: string; target_patient_id?: string; proposed_address?: string; confidence: number; status: string; reviewer_note?: string;
+  id: string; candidate_patient_id: string; candidate_health_id?: string; target_health_id?: string; review_type?: string; target_patient_id?: string; proposed_address?: string; confidence: number; status: string; reviewer_note?: string;
   proposed_given_name: string; proposed_family_name: string; proposed_date_of_birth: string; proposed_sex?: string;
   proposed_phone?: string; proposed_email?: string; proposed_issuing_jurisdiction?: string;
   proposed_identifiers?: { identifier_type: string; identifier_value: string; issuing_authority?: string }[];
@@ -69,7 +69,7 @@ export interface Principal {
   provider_name?: string | null; provider_status?: string | null;
 }
 export interface AuditEvent { id: string; event_type: string; health_id?: string; actor_id: string; action: string; payload: Record<string, unknown>; event_hash: string; created_at: string; }
-export interface Transfer { id: string; health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; reason: string; review_required: boolean; review_status: string; reviewed_by?: string; reviewed_at?: string; reviewer_note?: string; state: string; authorization_reference?: string; package_hash?: string; error_message?: string; created_at: string; updated_at: string; }
+export interface Transfer { id: string; health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; reason: string; review_required: boolean; review_status: string; completed_transfer_count?: number; reviewed_by?: string; reviewed_at?: string; reviewer_note?: string; state: string; authorization_reference?: string; package_hash?: string; error_message?: string; created_at: string; updated_at: string; }
 export interface CurrentRecordLocation {
   health_id: string; repository_id: string; repository_code: string; repository_name: string;
   jurisdiction: string; endpoint: string; resource_types: string[]; assigned_at?: string;
