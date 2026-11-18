@@ -114,7 +114,7 @@ async def list_my_duplicate_reviews(
 async def decide_duplicate_review(
     review_id: UUID,
     decision: DuplicateReviewDecision,
-    _: dict = Depends(require_auditor),
+    user: dict = Depends(require_auditor),
     session: AsyncSession = Depends(get_db),
 ) -> DuplicateReviewResponse:
     review = await IdentityService(session).decide_duplicate(
@@ -122,6 +122,18 @@ async def decide_duplicate_review(
     )
     if review is None:
         raise HTTPException(status_code=404, detail="Pending duplicate review not found")
+    if review.review_type == "PROFILE_UPDATE" and review.target_patient_id is not None:
+        patient = await session.get(PatientIdentity, review.target_patient_id)
+        if patient is not None:
+            await AuditService(session).log_event(
+                AuditEventCreate(
+                    event_type=AuditEventType.ACCESS,
+                    health_id=patient.display_health_id,
+                    actor_id=str(user.get("sub", "unknown")),
+                    action="PATIENT_PROFILE_UPDATE_" + ("APPROVED" if decision.decision == "APPROVED_PROFILE_UPDATE" else "REJECTED"),
+                    payload={"review_id": str(review.id), "reviewer_note": decision.reviewer_note},
+                )
+            )
     await session.commit()
     return DuplicateReviewResponse.model_validate(review)
 
