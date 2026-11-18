@@ -1,6 +1,6 @@
 from datetime import datetime
 from uuid import UUID, uuid4
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
@@ -12,6 +12,12 @@ class TransferRequest(Base):
     destination_repository_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("healthnet.repository.id"))
     requested_by: Mapped[str] = mapped_column(String(128))
     purpose: Mapped[str] = mapped_column(String(128))
+    reason: Mapped[str] = mapped_column(Text, default="")
+    review_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    review_status: Mapped[str] = mapped_column(String(24), default="NOT_REQUIRED")
+    reviewed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewer_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     scope: Mapped[str] = mapped_column(String(128))
     state: Mapped[str] = mapped_column(String(40), index=True)
     authorization_reference: Mapped[str | None] = mapped_column(String(256), nullable=True)
