@@ -128,6 +128,7 @@ export const api = {
   revokeConsent: (id: string) => request<Consent>("/consent/consents/" + encodeURIComponent(id), { method: "DELETE" }),
   consents: (healthId: string) => request<Consent[]>("/consent/patients/" + encodeURIComponent(healthId) + "/consents"),
   authorizedPatients: () => request<AuthorizedPatient[]>("/consent/authorized-patients"),
+  dismissProviderNotice: (id: string) => request<{ dismissed: boolean }>("/consent/provider-notices/" + encodeURIComponent(id) + "/dismiss", { method: "POST" }),
   providers: () => request<Provider[]>("/provider-trust/providers"),
   onboardProvider: (body: { username:string; email:string; initial_password:string; given_name:string; family_name:string; license_number:string; jurisdiction:string }) =>
     request<{ provider:Provider; username:string; message:string }>("/provider-trust/providers/onboard",{method:"POST",body:JSON.stringify(body)}),
