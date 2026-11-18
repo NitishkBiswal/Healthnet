@@ -57,7 +57,7 @@ export default function AuditorPortal() {
   return (
     <PortalShell requiredRole="auditor" title="Auditor Portal" description="Identity decisions, audit trails and trust integrity.">
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card title="Duplicate identity reviews">
+        <Card title="Identity & profile change reviews">
           {reviews.length === 0 ? (
             <p className="text-sm text-slate-600">No duplicate reviews are waiting.</p>
           ) : (
