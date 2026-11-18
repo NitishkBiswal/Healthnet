@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type DuplicateReview } from "@/lib/api";
+import { api, type AuditEvent, type DuplicateReview, type Transfer } from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
 export default function AuditorPortal() {
@@ -10,6 +10,8 @@ export default function AuditorPortal() {
   const [events, setEvents] = useState<unknown>(null);
   const [integrity, setIntegrity] = useState<unknown>(null);
   const [reviews, setReviews] = useState<DuplicateReview[]>([]);
+  const [transferReviews, setTransferReviews] = useState<Transfer[]>([]);
+  const [importAudits, setImportAudits] = useState<AuditEvent[]>([]);
   const [error, setError] = useState("");
 
   async function loadReviews() {
@@ -20,8 +22,28 @@ export default function AuditorPortal() {
     }
   }
 
+  async function loadTransferReviews() {
+    try {
+      setTransferReviews(await api.auditorTransferReviews());
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Could not load repository transfer reviews");
+    }
+  }
+
+  async function decideTransfer(id: string, decision: "APPROVE" | "REJECT") {
+    setError("");
+    try {
+      await api.reviewTransfer(id, decision, decision === "APPROVE" ? "Transfer reason and history reviewed; approved for migration." : "Transfer rejected after Auditor review.");
+      await loadTransferReviews();
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Could not update transfer review");
+    }
+  }
+
   useEffect(() => {
     void loadReviews();
+    void loadTransferReviews();
+    api.importedRecordAudits().then(setImportAudits).catch((reason) => setError(reason instanceof Error ? reason.message : "Could not load import audit events"));
   }, []);
 
   async function audit() {
@@ -42,7 +64,7 @@ export default function AuditorPortal() {
     }
   }
 
-  async function decide(id: string, decision: "APPROVED_DUPLICATE" | "REJECTED") {
+  async function decide(id: string, decision: "APPROVED_DUPLICATE" | "APPROVED_PROFILE_UPDATE" | "REJECTED") {
     setError("");
     try {
       await api.decideDuplicateReview(id, decision);
@@ -55,7 +77,7 @@ export default function AuditorPortal() {
   return (
     <PortalShell requiredRole="auditor" title="Auditor Portal" description="Identity decisions, audit trails and trust integrity.">
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card title="Duplicate identity reviews">
+        <Card title="Identity & profile change reviews">
           {reviews.length === 0 ? (
             <p className="text-sm text-slate-600">No duplicate reviews are waiting.</p>
           ) : (
@@ -66,17 +88,49 @@ export default function AuditorPortal() {
                     <p className="font-bold">{review.proposed_given_name} {review.proposed_family_name}</p>
                     <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold">{review.status}</span>
                   </div>
-                  <p className="mt-2">Candidate identity: <strong>{review.candidate_patient_id}</strong></p>
-                  <p>Confidence: <strong>{review.confidence.toFixed(2)}</strong></p>
-                  <p>DOB: {review.proposed_date_of_birth}</p>
-                  {review.proposed_email && <p>Email: {review.proposed_email}</p>}
-                  {review.proposed_phone && <p>Phone: {review.proposed_phone}</p>}
+                  {review.review_type === "PROFILE_UPDATE" && <p className="mt-2">Patient Health ID: <strong>{review.target_health_id ?? review.target_patient_id ?? "—"}</strong></p>}
+                  <p>Possible matching Health ID: <strong>{review.candidate_health_id ?? review.candidate_patient_id}</strong></p>
+                  <p>Match confidence: <strong>{review.confidence.toFixed(2)}</strong></p>
+                  <p>Proposed date of birth: {review.proposed_date_of_birth}</p>
+                  {review.proposed_sex && <p>Proposed sex: {review.proposed_sex}</p>}
+                  {review.proposed_email && <p>Proposed email: {review.proposed_email}</p>}
+                  {review.proposed_phone && <p>Proposed phone: {review.proposed_phone}</p>}
+                  {review.proposed_address && <p>Proposed address: {review.proposed_address}</p>}
                   {review.status === "PENDING" && (
-                    <div className="mt-4 flex gap-2">
-                      <button onClick={() => decide(review.id, "APPROVED_DUPLICATE")} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">Approve duplicate</button>
-                      <button onClick={() => decide(review.id, "REJECTED")} className="rounded-lg border border-slate-400 bg-white px-3 py-2 text-xs font-bold text-slate-900">Reject match</button>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {review.review_type === "PROFILE_UPDATE" ? <>
+                        <button onClick={() => decide(review.id, "APPROVED_PROFILE_UPDATE")} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">Approve profile update</button>
+                        <button onClick={() => decide(review.id, "REJECTED")} className="rounded-lg border border-slate-400 bg-white px-3 py-2 text-xs font-bold text-slate-900">Reject profile update</button>
+                      </> : <>
+                        <button onClick={() => decide(review.id, "APPROVED_DUPLICATE")} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">Approve duplicate</button>
+                        <button onClick={() => decide(review.id, "REJECTED")} className="rounded-lg border border-slate-400 bg-white px-3 py-2 text-xs font-bold text-slate-900">Reject match</button>
+                      </>}
                     </div>
                   )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card title="Repository transfer reviews">
+          <p className="mb-3 text-sm text-slate-600">Transfers beyond the normal patient transfer allowance require an independent Auditor decision. Review the patient's reason and previous completed transfer count before approval.</p>
+          {transferReviews.length === 0 ? <p className="text-sm text-slate-600">No repository transfers are waiting for Auditor review.</p> : (
+            <div className="space-y-3">
+              {transferReviews.map((transfer) => (
+                <div key={transfer.id} className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-bold text-slate-950">Health ID: {transfer.health_id}</p>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-amber-900">PENDING REVIEW</span>
+                  </div>
+                  <p className="mt-2 text-slate-800"><strong>Reason:</strong> {transfer.reason}</p>
+                  <p className="mt-1 text-slate-700"><strong>Completed previous transfers:</strong> {transfer.completed_transfer_count}</p>
+                  <p className="mt-1 break-all text-xs text-slate-500">Transfer ID: {transfer.id}</p>
+                  <p className="mt-1 text-xs text-slate-500">Submitted: {new Date(transfer.created_at).toLocaleString()}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => void decideTransfer(transfer.id, "APPROVE")} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Approve transfer</button>
+                    <button type="button" onClick={() => void decideTransfer(transfer.id, "REJECT")} className="rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-700">Reject transfer</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -91,6 +145,21 @@ export default function AuditorPortal() {
           {events !== null && <pre className="mt-4 max-h-[500px] overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(events, null, 2)}</pre>}
         </Card>
 
+        <Card title="Imported medical record audit">
+          <p className="mb-3 text-sm text-slate-700">Read-only history of records imported by administrators. Auditors can inspect source, actor, resource identifiers and file hash; they cannot change clinical records.</p>
+          {importAudits.length === 0 ? <p className="text-sm text-slate-600">No imported-record events found.</p> : (
+            <div className="max-h-[420px] space-y-2 overflow-auto">
+              {importAudits.map((event) => (
+                <div key={event.id} className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs">
+                  <p className="font-bold text-slate-950">{event.health_id} · {event.action}</p>
+                  <p className="text-slate-700">Actor: {event.actor_id} · {event.created_at}</p>
+                  <p className="text-slate-700">{JSON.stringify(event.payload)}</p>
+                  <p className="break-all text-slate-500">Hash: {event.event_hash}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
         <Card title="Trust ledger integrity">
           <button onClick={verify} className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">Verify chain</button>
           {integrity !== null && <pre className="mt-4 rounded-lg bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(integrity, null, 2)}</pre>}

@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     HAPI_FHIR_BASE_URL: str = "http://localhost:8090/fhir"
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
     SECRET_KEY: str = "dev_secret_key_changeme"
+    AADHAAR_ENCRYPTION_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

@@ -12,6 +12,13 @@ class FHIRClient:
     async def get_resource(self,resource_type:str,resource_id:str)->dict[str,Any]: return await self._request("GET",f"{resource_type}/{resource_id}")
     async def search(self,resource_type:str,params:dict[str,Any])->dict[str,Any]: return await self._request("GET",resource_type,params=params)
     async def create_resource(self,resource_type:str,resource:dict[str,Any])->dict[str,Any]: return await self._request("POST",resource_type,json=resource,headers={"Content-Type":"application/fhir+json"})
+    async def put_resource(self,resource_type:str,resource_id:str,resource:dict[str,Any])->dict[str,Any]:
+        return await self._request("PUT",f"{resource_type}/{resource_id}",json=resource,headers={"Content-Type":"application/fhir+json"})
+    async def delete_resource(self,resource_type:str,resource_id:str)->None:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response=await client.delete(f"{self.base_url}/{resource_type}/{resource_id}")
+            if response.status_code not in (200, 204, 404):
+                response.raise_for_status()
     async def health_check(self)->bool:
         try: await self.get_metadata(); return True
         except Exception: return False

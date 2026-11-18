@@ -1,7 +1,8 @@
+import re
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 
 class PatientIdentifierInput(BaseModel):
@@ -19,7 +20,28 @@ class PatientRegistrationRequest(BaseModel):
     email: str | None = Field(default=None, max_length=320)
     address: str | None = None
     issuing_jurisdiction: str = Field(min_length=1, max_length=32)
+    # Format-only check. HealthNet does not call UIDAI or claim Aadhaar verification.
+    aadhaar_number: SecretStr | None = None
     identifiers: list[PatientIdentifierInput] = Field(default_factory=list)
+
+    @field_validator("aadhaar_number")
+    @classmethod
+    def validate_aadhaar_number(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not re.fullmatch(r"\d{12}", value.get_secret_value()):
+            raise ValueError("Aadhaar number must contain exactly 12 digits")
+        return value
+
+    @model_validator(mode="after")
+    def prevent_plaintext_aadhaar_identifier(self) -> "PatientRegistrationRequest":
+        if any(
+            any(token in item.identifier_type.strip().upper() for token in ("AADHAAR", "AADHAR", "UIDAI"))
+            or item.identifier_type.strip().upper() == "UID"
+            for item in self.identifiers
+        ):
+            raise ValueError(
+                "Use the dedicated aadhaar_number field; Aadhaar must not be stored as a plaintext identifier"
+            )
+        return self
 
 
 class PatientResponse(BaseModel):
@@ -66,6 +88,11 @@ class DuplicateReviewResponse(BaseModel):
 
     id: UUID
     candidate_patient_id: UUID
+    candidate_health_id: str | None = None
+    target_health_id: str | None = None
+    review_type: str = "DUPLICATE_REGISTRATION"
+    target_patient_id: UUID | None = None
+    proposed_address: str | None = None
     confidence: float
     status: str
     reviewer_note: str | None
@@ -82,7 +109,7 @@ class DuplicateReviewResponse(BaseModel):
 
 
 class DuplicateReviewDecision(BaseModel):
-    decision: str = Field(pattern="^(APPROVED_DUPLICATE|REJECTED)$")
+    decision: str = Field(pattern="^(APPROVED_DUPLICATE|APPROVED_PROFILE_UPDATE|REJECTED)$")
     reviewer_note: str | None = None
 
 
@@ -99,3 +126,35 @@ class LocationHistoryRequest(BaseModel):
     )
     started_at: datetime
     ended_at: datetime | None = None
+
+
+class PatientProfileUpdate(BaseModel):
+    given_name: str = Field(min_length=1, max_length=100)
+    family_name: str = Field(min_length=1, max_length=100)
+    date_of_birth: date
+    sex: str | None = Field(default=None, max_length=32)
+    phone: str | None = Field(default=None, max_length=32)
+    email: str | None = Field(default=None, max_length=320)
+    address: str | None = None
+
+
+class ProfileUpdateResult(BaseModel):
+    outcome: str
+    patient: PatientResponse | None = None
+    duplicate_review_id: UUID | None = None
+
+
+class AadhaarUpdateRequest(BaseModel):
+    aadhaar_number: SecretStr
+
+    @field_validator("aadhaar_number")
+    @classmethod
+    def validate_aadhaar_number(cls, value: SecretStr) -> SecretStr:
+        if not re.fullmatch(r"\d{12}", value.get_secret_value()):
+            raise ValueError("Aadhaar number must contain exactly 12 digits")
+        return value
+
+
+class AadhaarStatusResponse(BaseModel):
+    has_aadhaar: bool
+    masked_value: str | None = None

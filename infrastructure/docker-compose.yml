@@ -83,6 +83,78 @@ services:
       - healthnet
     restart: "no"
 
+  hapi-fhir-kolkata:
+    image: hapiproject/hapi:latest
+    container_name: healthnet-hapi-fhir-kolkata
+    ports:
+      - "8091:8080"
+    environment:
+      spring.datasource.url: jdbc:postgresql://postgres:5432/hapi_fhir_kolkata_db
+      spring.datasource.username: healthnet
+      spring.datasource.password: healthnet_dev_password
+      spring.datasource.driverClassName: org.postgresql.Driver
+      spring.jpa.properties.hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
+      hapi.fhir.fhir_version: R4
+      hapi.fhir.allow_external_references: "true"
+      hapi.fhir.allow_multiple_delete: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/fhir/metadata || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - healthnet
+
+  karnataka-db-init:
+    image: postgres:16-alpine
+    container_name: healthnet-karnataka-db-init
+    environment:
+      PGPASSWORD: healthnet_dev_password
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until pg_isready -h postgres -U healthnet -d postgres; do sleep 2; done
+        if ! psql -h postgres -U healthnet -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='hapi_fhir_karnataka_db'" | grep -q 1; then
+          psql -h postgres -U healthnet -d postgres -c "CREATE DATABASE hapi_fhir_karnataka_db"
+        fi
+        psql -h postgres -U healthnet -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE hapi_fhir_karnataka_db TO healthnet"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - healthnet
+    restart: "no"
+
+  hapi-fhir-karnataka:
+    image: hapiproject/hapi:latest
+    container_name: healthnet-hapi-fhir-karnataka
+    ports:
+      - "8092:8080"
+    environment:
+      spring.datasource.url: jdbc:postgresql://postgres:5432/hapi_fhir_karnataka_db
+      spring.datasource.username: healthnet
+      spring.datasource.password: healthnet_dev_password
+      spring.datasource.driverClassName: org.postgresql.Driver
+      spring.jpa.properties.hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
+      hapi.fhir.fhir_version: R4
+      hapi.fhir.allow_external_references: "true"
+      hapi.fhir.allow_multiple_delete: "true"
+    depends_on:
+      karnataka-db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/fhir/metadata || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - healthnet
+
   hapi-fhir:
     image: hapiproject/hapi:latest
     container_name: healthnet-hapi-fhir

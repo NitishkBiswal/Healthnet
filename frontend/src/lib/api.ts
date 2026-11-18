@@ -34,21 +34,25 @@ export interface Patient {
   id?: string; display_health_id: string; issuing_jurisdiction: string; given_name: string; family_name: string;
   date_of_birth: string; sex?: string; phone?: string; email?: string; address?: string; status: string;
 }
+export interface MedicalImportResult { accepted: number; failed: number; emergency_conditions_added: number; patients_affected: number; file_sha256: string; errors: { row: number; health_id?: string | null; error: string }[]; message: string; }
+export interface AadhaarStatus { has_aadhaar: boolean; masked_value?: string | null; }
 export interface PatientRegistration {
   given_name: string; family_name: string; date_of_birth: string; sex?: string; phone?: string; email?: string;
-  address?: string; issuing_jurisdiction: string;
+  address?: string; aadhaar_number?: string; issuing_jurisdiction: string;
   identifiers?: { identifier_type: string; identifier_value: string; issuing_authority?: string }[];
 }
 export interface MatchCandidate { patient_id: string; health_id: string; confidence: number; band: string; }
 export interface RegistrationResult { outcome: string; patient?: Patient; matches: MatchCandidate[]; duplicate_review_id?: string; }
 export interface DuplicateReview {
-  id: string; candidate_patient_id: string; confidence: number; status: string; reviewer_note?: string;
+  id: string; candidate_patient_id: string; candidate_health_id?: string; target_health_id?: string; review_type?: string; target_patient_id?: string; proposed_address?: string; confidence: number; status: string; reviewer_note?: string;
   proposed_given_name: string; proposed_family_name: string; proposed_date_of_birth: string; proposed_sex?: string;
   proposed_phone?: string; proposed_email?: string; proposed_issuing_jurisdiction?: string;
   proposed_identifiers?: { identifier_type: string; identifier_value: string; issuing_authority?: string }[];
   created_at: string; reviewed_at?: string;
 }
+export interface ProfileUpdateResult { outcome: "UPDATED" | "PENDING_REVIEW"; patient?: Patient; duplicate_review_id?: string; }
 export interface Repository { id: string; code: string; name: string; jurisdiction: string; base_url: string; status: string; description?: string; }
+export interface RepositorySummary extends Repository { active_patient_count: number; }
 export interface Consent {
   id: string; health_id: string; grantee_type: string; grantee_id: string; purpose: string; scopes: string[];
   status: string; valid_from: string; valid_until?: string; revoked_at?: string; reason?: string;
@@ -65,17 +69,43 @@ export interface Principal {
   subject: string; email?: string; roles: string[]; provider_id?: string | null;
   provider_name?: string | null; provider_status?: string | null;
 }
-export interface AuditEvent { id: string; event_type: string; health_id?: string; actor_id: string; action: string; payload: string; event_hash: string; created_at: string; }
-export interface Transfer { id: string; health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; state: string; authorization_reference?: string; package_hash?: string; error_message?: string; created_at: string; updated_at: string; }
+export interface AuditEvent { id: string; event_type: string; health_id?: string; actor_id: string; action: string; payload: Record<string, unknown>; event_hash: string; created_at: string; }
+export interface Transfer { id: string; health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; reason: string; review_required: boolean; review_status: string; completed_transfer_count?: number; reviewed_by?: string; reviewed_at?: string; reviewer_note?: string; state: string; authorization_reference?: string; package_hash?: string; error_message?: string; created_at: string; updated_at: string; }
+export interface CurrentRecordLocation {
+  health_id: string; repository_id: string; repository_code: string; repository_name: string;
+  jurisdiction: string; endpoint: string; resource_types: string[]; assigned_at?: string;
+}
 
 export const api = {
   currentPrincipal: () => request<Principal>("/authorization/me"),
+  importMedicalRecords: async (file: File) => {
+    const token = getAccessToken();
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch(API_BASE_URL + "/fhir/imports/csv-excel", {
+      method: "POST",
+      headers: token ? { Authorization: "Bearer " + token } : {},
+      body: form,
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      let message = body || "HTTP " + response.status;
+      try { const parsed = JSON.parse(body) as { detail?: string }; if (parsed.detail) message = parsed.detail; } catch {}
+      throw new Error(message);
+    }
+    return response.json() as Promise<MedicalImportResult>;
+  },
+
   patient: (healthId: string) => request<Patient>("/identity/" + encodeURIComponent(healthId)),
   myPatient: () => request<Patient>("/identity/me"),
+  updateMyProfile: (body: Pick<Patient, "given_name" | "family_name" | "date_of_birth" | "sex" | "phone" | "email" | "address">) => request<ProfileUpdateResult>("/identity/me/profile", { method: "PUT", body: JSON.stringify(body) }),
+  myAadhaarStatus: () => request<AadhaarStatus>("/identity/me/aadhaar"),
+  updateMyAadhaar: (aadhaar_number: string) => request<AadhaarStatus>("/identity/me/aadhaar", { method: "PUT", body: JSON.stringify({ aadhaar_number }) }),
   registerPatient: (body: PatientRegistration) => request<RegistrationResult>("/identity/register", { method: "POST", body: JSON.stringify(body) }),
   myDuplicateReviews: () => request<DuplicateReview[]>("/identity/duplicate-reviews/mine"),
   duplicateReviews: () => request<DuplicateReview[]>("/identity/duplicate-reviews"),
-  decideDuplicateReview: (id: string, decision: "APPROVED_DUPLICATE" | "REJECTED", reviewer_note?: string) =>
+  decideDuplicateReview: (id: string, decision: "APPROVED_DUPLICATE" | "APPROVED_PROFILE_UPDATE" | "REJECTED", reviewer_note?: string) =>
     request<DuplicateReview>("/identity/duplicate-reviews/" + encodeURIComponent(id) + "/decision", { method: "POST", body: JSON.stringify({ decision, reviewer_note }) }),
   createConsent: (body: { health_id: string; grantee_type: string; grantee_id: string; purpose: string; scopes: string[]; valid_from: string; valid_until?: string; reason?: string }) =>
     request<Consent>("/consent/consents", { method: "POST", body: JSON.stringify(body) }),
@@ -87,13 +117,35 @@ export const api = {
     request<{ provider:Provider; username:string; message:string }>("/provider-trust/providers/onboard",{method:"POST",body:JSON.stringify(body)}),
   createProvider: (body: { external_id: string; given_name: string; family_name: string; license_number: string; jurisdiction: string; keycloak_subject?: string }) =>
     request<Provider>("/provider-trust/providers", { method: "POST", body: JSON.stringify(body) }),
-  emergency: (healthId: string) => request<Record<string, unknown>>("/emergency/patients/" + encodeURIComponent(healthId) + "/emergency-profile"),
+  emergency: (healthId: string, purpose = "TREATMENT", scope = "clinical") => request<{ health_id: string; blood_group?: string | null; allergies: string[]; medications: string[]; conditions: string[]; emergency_contacts: string[] }>("/emergency/patients/" + encodeURIComponent(healthId) + "/emergency-profile?purpose=" + encodeURIComponent(purpose) + "&scope=" + encodeURIComponent(scope)),
+  myMedicalRecords: () => request<Record<string, unknown>>("/longitudinal/patients/me/medical-records"),
   longitudinal: (healthId: string, purpose = "TREATMENT", scope = "clinical") =>
     request<Record<string, unknown>>("/longitudinal/patients/longitudinal-view", { method: "POST", body: JSON.stringify({ health_id: healthId, purpose, scope }) }),
   repositories: () => request<Repository[]>("/repository/repositories"),
+  repositorySummaries: () => request<RepositorySummary[]>("/repository/repositories/summary"),
+  currentRecordLocation: (healthId: string) => request<CurrentRecordLocation>("/record-locator/patients/" + encodeURIComponent(healthId) + "/current"),
+  submitPatientRecord: (healthId: string, resource: Record<string, unknown>) =>
+    request<{ accepted: boolean; health_id: string; repository_code: string; resource_type: string; resource_id: string; message: string }>(
+      "/fhir/patients/" + encodeURIComponent(healthId) + "/records",
+      { method: "POST", body: JSON.stringify(resource) },
+    ),
   audits: (healthId: string) => request<AuditEvent[]>("/audit/patient/" + encodeURIComponent(healthId)),
+  importedRecordAudits: () => request<AuditEvent[]>("/audit/imports"),
   verifyLedger: () => request<{ valid: boolean; entries_checked: number }>("/trust-ledger/ledger/verify"),
-  createTransfer: (body: { health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string }) =>
+  createTransfer: (body: { health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; reason: string }) =>
     request<Transfer>("/migration/transfer-requests", { method: "POST", body: JSON.stringify(body) }),
+  transferDestinations: () => request<Repository[]>("/migration/transfer-destinations"),
+  createMyTransfer: (body: { destination_repository_id: string; reason: string }) =>
+    request<Transfer>("/migration/my-transfers", { method: "POST", body: JSON.stringify(body) }),
+  adminTransfers: () => request<Transfer[]>("/migration/admin/transfers"),
+  auditorTransferReviews: () => request<Transfer[]>("/migration/auditor/reviews"),
+  reviewTransfer: (id: string, decision: "APPROVE" | "REJECT", reviewer_note?: string) =>
+    request<Transfer>("/migration/auditor/reviews/" + encodeURIComponent(id), { method: "POST", body: JSON.stringify({ decision, reviewer_note }) }),
+  myTransfers: () => request<Transfer[]>("/migration/my-transfers"),
+  authorizeTransfer: (id: string, authorization_reference: string) =>
+    request<Transfer>("/migration/transfer-authorizations/" + encodeURIComponent(id), { method: "POST", body: JSON.stringify({ authorization_reference }) }),
   transferStatus: (id: string) => request<Transfer>("/migration/transfers/" + id + "/status"),
+  issueTransferToken: (id: string) => request<{ transfer_id: string; authorization_token: string; expires_at: string }>("/migration/transfers/" + id + "/issue-token", { method: "POST" }),
+  executeTransfer: (id: string, body: { authorization_token: string; resource_count: number; package_hash?: string }) =>
+    request<Record<string, unknown>>("/migration/transfers/" + id + "/execute", { method: "POST", body: JSON.stringify(body) }),
 };

@@ -16,6 +16,7 @@ class IdentityStatus(StrEnum):
 class DuplicateReviewStatus(StrEnum):
     PENDING = "PENDING"
     APPROVED_DUPLICATE = "APPROVED_DUPLICATE"
+    APPROVED_PROFILE_UPDATE = "APPROVED_PROFILE_UPDATE"
     REJECTED = "REJECTED"
 
 
@@ -35,6 +36,10 @@ class PatientIdentity(Base):
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Aadhaar is held only in the identity vault, encrypted at application level.
+    # It is deliberately excluded from API response schemas and clinical FHIR payloads.
+    aadhaar_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    aadhaar_last4: Mapped[str | None] = mapped_column(String(4), nullable=True)
     owner_subject: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
     status: Mapped[str] = mapped_column(String(24), default=IdentityStatus.ACTIVE.value)
     superseded_by: Mapped[UUID | None] = mapped_column(
@@ -86,6 +91,11 @@ class DuplicateReview(Base):
     __table_args__ = {"schema": "healthnet"}
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    review_type: Mapped[str] = mapped_column(String(32), default="DUPLICATE_REGISTRATION")
+    target_patient_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("healthnet.patient_identity.id", name="fk_duplicate_review_target_patient"), nullable=True, index=True
+    )
+    proposed_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     candidate_patient_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("healthnet.patient_identity.id"), index=True
     )

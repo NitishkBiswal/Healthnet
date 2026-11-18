@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.identity.models import (
@@ -17,6 +17,9 @@ from app.identity.models import (
     PatientLocationHistory,
 )
 from app.identity.schemas import LocationHistoryRequest, PatientRegistrationRequest
+from app.identity.identifiers import encrypt_aadhaar
+from app.record_locator.models import RecordLocator
+from app.repository.models import EHRCustody, Repository
 
 
 @dataclass(frozen=True)
@@ -147,6 +150,8 @@ class IdentityService:
             phone=request.phone,
             email=request.email,
             address=request.address,
+            aadhaar_encrypted=encrypt_aadhaar(request.aadhaar_number.get_secret_value()) if request.aadhaar_number else None,
+            aadhaar_last4=request.aadhaar_number.get_secret_value()[-4:] if request.aadhaar_number else None,
             owner_subject=requesting_subject,
         )
         self.session.add(patient)
@@ -160,6 +165,51 @@ class IdentityService:
                     issuing_authority=identifier.issuing_authority,
                 )
             )
+        await self.session.flush()
+
+        # Every newly registered patient receives one authoritative repository.
+        # Prefer an online repository in the issuing jurisdiction, then use an
+        # online/degraded repository elsewhere so registration can continue during
+        # regional capacity changes.
+        repository = await self.session.scalar(
+            select(Repository)
+            .where(Repository.status.in_(["ONLINE", "DEGRADED"]))
+            .order_by(
+                case((Repository.jurisdiction == request.issuing_jurisdiction, 0), else_=1),
+                Repository.code,
+            )
+            .limit(1)
+        )
+        if repository is None:
+            raise ValueError(
+                "No available clinical repository is registered; an administrator must register one before patient onboarding"
+            )
+
+        now = datetime.now(UTC)
+        resource_types = (
+            "Patient,Encounter,Condition,Observation,DiagnosticReport,"
+            "MedicationRequest,Procedure,DocumentReference"
+        )
+        self.session.add(
+            RecordLocator(
+                health_id=patient.display_health_id,
+                repository_id=repository.id,
+                endpoint=repository.base_url,
+                resource_types=resource_types,
+                status="ACTIVE",
+                notes="Automatically assigned during patient registration",
+                last_verified_at=now,
+            )
+        )
+        self.session.add(
+            EHRCustody(
+                health_id=patient.display_health_id,
+                repository_id=repository.id,
+                resource_types=resource_types,
+                custody_start=now,
+                custody_end=None,
+            )
+        )
         await self.session.flush()
         return "REGISTERED", patient, [], None
 
@@ -194,7 +244,25 @@ class IdentityService:
         review = await self.session.get(DuplicateReview, review_id)
         if review is None or review.status != DuplicateReviewStatus.PENDING.value:
             return None
-        review.status = decision
+        if review.review_type == "PROFILE_UPDATE":
+            if decision not in {"APPROVED_PROFILE_UPDATE", "REJECTED"}:
+                raise ValueError("Profile update reviews require APPROVED_PROFILE_UPDATE or REJECTED")
+            if decision == "APPROVED_PROFILE_UPDATE":
+                patient = await self.session.get(PatientIdentity, review.target_patient_id)
+                if patient is None:
+                    raise ValueError("Patient profile for this review no longer exists")
+                patient.given_name = review.proposed_given_name
+                patient.family_name = review.proposed_family_name
+                patient.date_of_birth = review.proposed_date_of_birth
+                patient.sex = review.proposed_sex
+                patient.phone = review.proposed_phone
+                patient.email = review.proposed_email
+                patient.address = review.proposed_address
+            review.status = decision
+        else:
+            if decision not in {"APPROVED_DUPLICATE", "REJECTED"}:
+                raise ValueError("Invalid duplicate registration decision")
+            review.status = decision
         review.reviewer_note = reviewer_note
         review.reviewed_at = datetime.now(UTC)
         return review

@@ -49,3 +49,7 @@ class CustodyResponse(BaseModel):
     resource_types: list[str]
     custody_start: datetime
     custody_end: datetime | None = None
+
+
+class RepositorySummary(RepositoryInfo):
+    active_patient_count: int = 0
