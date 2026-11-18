@@ -3,7 +3,7 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0010_patient_repository_transfers"
+revision = "0010_patient_repo_transfer"
 down_revision = "0009_profile_update_review"
 branch_labels = None
 depends_on = None
