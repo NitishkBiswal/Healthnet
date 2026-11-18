@@ -121,7 +121,8 @@ export default function AdminPortal() {
       if (healthId.trim() === item.health_id) {
         setCurrentLocation(await api.currentRecordLocation(item.health_id));
       }
-      setMigrationMessage(`Transfer for ${item.health_id} completed. Destination records were verified before custody changed.`);
+      const manifest = completed as { resource_count?: number; validation_status?: string; package_hash?: string };
+      setMigrationMessage(`Transfer for ${item.health_id} completed: ${manifest.resource_count ?? 0} FHIR resources imported; destination validation ${manifest.validation_status ?? "completed"}. Package SHA-256: ${manifest.package_hash ?? "not returned"}`);
       setResult(completed);
       await loadAdminTransfers();
     } catch (reason: unknown) {
