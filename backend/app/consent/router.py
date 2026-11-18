@@ -11,6 +11,9 @@ from app.consent.schemas import (
     ConsentResponse,
 )
 from app.consent.service import ConsentService
+from app.consent.models import Consent
+from app.consent.dismissal_models import ProviderNoticeDismissal
+from app.provider_trust.models import Provider
 from app.security.dependencies import get_current_user, require_role
 from app.security.rbac import Role
 
@@ -170,3 +173,34 @@ async def check_consent(
         request.at,
     )
     return {"allowed": allowed}
+
+
+@router.post("/provider-notices/{consent_id}/dismiss", status_code=status.HTTP_204_NO_CONTENT)
+async def dismiss_provider_notice(
+    consent_id: UUID,
+    user: dict = Depends(require_provider),
+    session: AsyncSession = Depends(get_db),
+):
+    """Hide a revoked migration notice for this provider only; preserve consent/audit history."""
+    subject = str(user.get("sub") or "")
+    provider = await session.scalar(
+        select(Provider).where(
+            Provider.keycloak_subject == subject,
+            Provider.trust_status == "ACTIVE",
+        )
+    )
+    consent = await session.get(Consent, consent_id)
+    if (
+        provider is None
+        or consent is None
+        or consent.grantee_type != "PROVIDER"
+        or consent.grantee_id != provider.external_id
+        or consent.status != "REVOKED"
+        or not (consent.reason or "").startswith("REPOSITORY_CHANGED:")
+    ):
+        raise HTTPException(404, "Revoked repository-change notice not found")
+
+    existing = await session.get(ProviderNoticeDismissal, (consent_id, subject))
+    if existing is None:
+        session.add(ProviderNoticeDismissal(consent_id=consent_id, provider_subject=subject))
+        await session.commit()
