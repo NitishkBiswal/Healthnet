@@ -33,7 +33,13 @@ The current Compose file starts the supporting infrastructure in Docker. The API
 | HAPI FHIR (Kolkata) | HAPI FHIR R4 | http://localhost:8091/fhir |
 | HAPI FHIR (Karnataka) | HAPI FHIR R4 | http://localhost:8092/fhir |
 
-The Compose stack is defined in `infrastructure/docker-compose.yml`. It includes PostgreSQL, Redis, Keycloak, and three HAPI FHIR instances. PostgreSQL also hosts separate databases for Keycloak and each FHIR instance.
+The Compose stack is defined in `infrastructure/docker-compose.yml`. It includes PostgreSQL, Redis, Keycloak, and three HAPI FHIR instances (default/Odisha, Kolkata and Karnataka). PostgreSQL hosts separate databases for the application, Keycloak and each FHIR instance. The `karnataka-db-init` one-shot container creates the Karnataka FHIR database when needed and exits after successful initialization. The Keycloak service mounts the custom HealthNet login theme from `infrastructure/keycloak/themes/healthnet`.
+
+## Current project status
+
+The current `main` branch contains the working HealthNet classroom/demo prototype and the unified light user interface. The public landing page, role-selection pages, and Keycloak sign-in theme use the same light slate, white-card and blue-accent design. Keycloak retains its native OpenID Connect login, registration and password-reset flows; the custom theme changes presentation only.
+
+The local demonstration includes patient, provider, administrator and auditor portals; patient consent grant/revocation; provider access to authorized patient records; administrative provider/repository workflows; CSV/Excel medical-record import; audit views; and multi-repository HAPI FHIR demonstration infrastructure. Feature availability should be checked in the running application and API docs; this README is not a claim of production readiness or regulatory certification.
 
 ## Prerequisites
 
@@ -63,14 +69,14 @@ npm --version
 Open PowerShell:
 
 ```powershell
-git clone --branch codex/healthnet-changes https://github.com/NitishkBiswal/Healthnet.git
+git clone --branch main https://github.com/NitishkBiswal/Healthnet.git
 cd Healthnet
 ```
 
 If you already have a clone, switch to the project branch and pull the latest changes:
 
 ```powershell
-git switch codex/healthnet-changes
+git switch main
 git pull
 ```
 
