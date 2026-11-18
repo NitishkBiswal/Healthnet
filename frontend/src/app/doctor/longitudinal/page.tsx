@@ -262,7 +262,7 @@ function DoctorLongitudinalViewContent() {
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Name</p>
                 <p className="mt-1 font-semibold text-slate-950">
-                  {patient ? `${patient.given_name} ${patient.family_name}` : patientSummary ? `${patientSummary.given_name} ${patientSummary.family_name}` : "Loading..."}
+                  {patient ? `${patient.given_name} ${patient.family_name}` : "Loading..."}
                 </p>
               </div>
               <div>
