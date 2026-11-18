@@ -10,6 +10,7 @@ class LedgerEventType(StrEnum):
     TRANSFER_AUTHORIZED = "TRANSFER_AUTHORIZED"
     TRANSFER_COMPLETED = "TRANSFER_COMPLETED"
     CONSENT_RECORDED = "CONSENT_RECORDED"
+    CUSTODY_SWITCHED = "CUSTODY_SWITCHED"
 
 class LedgerEntryCreate(BaseModel):
     transaction_id: str = Field(min_length=1, max_length=128)

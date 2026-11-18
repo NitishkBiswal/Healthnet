@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -11,6 +12,7 @@ from app.core.config import settings
 from app.core.database import close_db, init_db
 from app.core.logging import configure_logging
 from app.core.redis import close_redis, init_redis
+from app.identity_resolution.jobs import nightly_duplicate_scan
 
 
 @asynccontextmanager
@@ -19,9 +21,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     configure_logging()
     await init_db()
     await init_redis()
-    yield
-    await close_redis()
-    await close_db()
+    duplicate_scan = asyncio.create_task(nightly_duplicate_scan())
+    try:
+        yield
+    finally:
+        duplicate_scan.cancel()
+        try:
+            await duplicate_scan
+        except asyncio.CancelledError:
+            pass
+        await close_redis()
+        await close_db()
 
 
 def create_app() -> FastAPI:

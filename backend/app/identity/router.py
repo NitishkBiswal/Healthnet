@@ -5,6 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.rate_limit import identity_registration_limit
+from app.audit.schemas import AuditEventCreate, AuditEventType
+from app.audit.service import AuditService
 from app.identity.models import DuplicateReview, PatientIdentity
 from app.identity.schemas import (
     DuplicateReviewDecision,
@@ -17,10 +20,32 @@ from app.identity.schemas import (
     RegistrationResult,
 )
 from app.identity.service import IdentityService
+from app.identity_resolution.models import IdentityMatchConfiguration
+from app.identity_resolution.schemas import (
+    MatchConfigurationResponse,
+    MatchConfigurationUpdate,
+)
+from app.identity_resolution.service import IdentityResolutionService
 from app.security.dependencies import get_current_user
 from app.security.rbac import Role
 
 router = APIRouter(tags=["Identity"])
+
+
+def _validate_match_configuration(configuration: MatchConfigurationUpdate) -> None:
+    weights = (
+        configuration.name_weight
+        + configuration.date_of_birth_weight
+        + configuration.sex_weight
+        + configuration.phone_weight
+        + configuration.email_weight
+    )
+    if weights <= 0:
+        raise HTTPException(422, "At least one match weight must be greater than zero")
+    if configuration.high_confidence <= configuration.medium_confidence:
+        raise HTTPException(
+            422, "High confidence threshold must exceed medium confidence threshold"
+        )
 
 
 async def require_admin(user: dict = Depends(get_current_user)) -> dict:
@@ -47,7 +72,58 @@ async def require_auditor(user: dict = Depends(get_current_user)) -> dict:
     return user
 
 
-@router.post("/register", response_model=RegistrationResult, status_code=status.HTTP_201_CREATED)
+@router.get(
+    "/match-configuration", response_model=MatchConfigurationResponse
+)
+async def get_match_configuration(
+    _: dict = Depends(require_admin),
+    session: AsyncSession = Depends(get_db),
+) -> MatchConfigurationResponse:
+    configuration = await session.get(IdentityMatchConfiguration, "default")
+    if configuration is None:
+        configuration = IdentityMatchConfiguration(config_key="default")
+        session.add(configuration)
+        await session.commit()
+        await session.refresh(configuration)
+    return MatchConfigurationResponse.model_validate(configuration)
+
+
+@router.put(
+    "/match-configuration", response_model=MatchConfigurationResponse
+)
+async def update_match_configuration(
+    request: MatchConfigurationUpdate,
+    _: dict = Depends(require_admin),
+    session: AsyncSession = Depends(get_db),
+) -> MatchConfigurationResponse:
+    _validate_match_configuration(request)
+    configuration = await session.get(IdentityMatchConfiguration, "default")
+    if configuration is None:
+        configuration = IdentityMatchConfiguration(config_key="default")
+        session.add(configuration)
+    for key, value in request.model_dump().items():
+        setattr(configuration, key, value)
+    await session.commit()
+    await session.refresh(configuration)
+    return MatchConfigurationResponse.model_validate(configuration)
+
+
+@router.post("/duplicate-reviews/recheck")
+async def recheck_duplicate_candidates(
+    _: dict = Depends(require_admin),
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, int]:
+    created = await IdentityResolutionService(session).recheck_existing_identities()
+    await session.commit()
+    return {"reviews_created": created}
+
+
+@router.post(
+    "/register",
+    response_model=RegistrationResult,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(identity_registration_limit)],
+)
 async def register_patient(
     request: PatientRegistrationRequest,
     user: dict = Depends(require_patient_or_admin),
@@ -115,14 +191,30 @@ async def decide_duplicate_review(
 @router.post("/merge", response_model=PatientResponse)
 async def merge_identities(
     request: IdentityMergeRequest,
-    _: dict = Depends(require_auditor),
+    user: dict = Depends(require_auditor),
     session: AsyncSession = Depends(get_db),
 ) -> PatientResponse:
     try:
         target = await IdentityService(session).merge_identities(
-            request.source_patient_id, request.target_patient_id
+            request.source_patient_id,
+            request.target_patient_id,
+            str(user.get("sub", "unknown")),
+            request.reviewer_note,
+        )
+        await AuditService(session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.IDENTITY_MERGE,
+                health_id=target.display_health_id,
+                actor_id=str(user.get("sub", "unknown")),
+                action="patient identities merged",
+                payload={
+                    "source_patient_id": str(request.source_patient_id),
+                    "target_patient_id": str(request.target_patient_id),
+                },
+            )
         )
     except ValueError as exc:
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     await session.commit()
     return PatientResponse.model_validate(target)

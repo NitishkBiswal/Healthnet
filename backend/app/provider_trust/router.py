@@ -22,8 +22,7 @@ from app.security.rbac import Role
 router = APIRouter(tags=["Provider Trust"])
 
 
-def require_admin():
-    return require_role(Role.ADMIN)
+require_admin = require_role(Role.ADMIN)
 
 
 @router.post(

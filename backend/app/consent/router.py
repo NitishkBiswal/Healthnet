@@ -2,6 +2,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
+from app.core.rate_limit import consent_write_limit
+from app.api.deps import PaginationParams
 from app.identity.models import PatientIdentity
 from app.provider_trust.models import Provider
 from sqlalchemy import select
@@ -45,6 +47,7 @@ def response(x):
     "/consents",
     response_model=ConsentResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(consent_write_limit)],
 )
 async def create_consent(
     request: ConsentCreateRequest,
@@ -99,7 +102,11 @@ async def get_consent(
     return response(x)
 
 
-@router.delete("/consents/{consent_id}", response_model=ConsentResponse)
+@router.delete(
+    "/consents/{consent_id}",
+    response_model=ConsentResponse,
+    dependencies=[Depends(consent_write_limit)],
+)
 async def revoke_consent(
     consent_id: UUID,
     user: dict = Depends(require_patient),
@@ -152,6 +159,7 @@ async def get_patient_consents(
     health_id: str,
     user: dict = Depends(require_patient),
     session: AsyncSession = Depends(get_db),
+    pagination: PaginationParams = Depends(),
 ):
     owner = await session.scalar(
         select(PatientIdentity).where(
@@ -163,7 +171,9 @@ async def get_patient_consents(
 
     return [
         response(x)
-        for x in await ConsentService(session).get_patient_consents(health_id)
+        for x in await ConsentService(session).get_patient_consents(
+            health_id, limit=pagination.limit, offset=pagination.offset
+        )
     ]
 
 
@@ -174,9 +184,10 @@ async def get_patient_consents(
 async def authorized_patients(
     user: dict = Depends(require_provider),
     session: AsyncSession = Depends(get_db),
+    pagination: PaginationParams = Depends(),
 ):
     rows = await ConsentService(session).get_authorized_patients(
-        user.get("sub", "")
+        user.get("sub", ""), limit=pagination.limit, offset=pagination.offset
     )
     return [
         AuthorizedPatientResponse(

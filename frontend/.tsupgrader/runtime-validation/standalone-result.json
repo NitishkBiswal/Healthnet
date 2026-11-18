@@ -1,0 +1,148 @@
+{
+  "planHash": "fa6b85a8e8c6ddeb21020fcfa60d820f74334a83059a7356ef3ecf35fd8c07c8",
+  "phase": "standalone",
+  "recordedAtUtc": "2026-11-06T15:27:53.7460162Z",
+  "retryCount": 0,
+  "resetBaseline": false,
+  "complete": true,
+  "result": {
+    "setupSucceeded": true,
+    "setupDurationMs": 0,
+    "setupFailureOutput": null,
+    "assertions": [
+      {
+        "name": "typescript-no-emit",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "",
+        "durationMs": 4355
+      },
+      {
+        "name": "frontend-lint",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E frontend@0.1.0 lint\r\n\u003E eslint\r\n\r\n",
+        "durationMs": 9433
+      },
+      {
+        "name": "tests-pass",
+        "kind": "process",
+        "verificationMethod": "test-results",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E frontend@0.1.0 test\r\n\u003E vitest run\r\n\r\n\r\n RUN  v5.0.5 C:/Users/KIIT0001/OneDrive/Desktop/projects/MiniProject/Healthnet/frontend\r\n\r\n\r\n Test Files  1 passed (1)\r\n      Tests  4 passed (4)\r\n   Start at  20:57:41\r\n   Duration  333ms (tests 34%, import 33%, transform 21%, worker 12%)\r\n\r\n",
+        "durationMs": 1785,
+        "testResults": {
+          "testFramework": "vitest",
+          "runnerDetectedFrom": "package_json",
+          "testsTotal": 4,
+          "testsPassed": 4,
+          "testsFailed": 0,
+          "testsSkipped": 0,
+          "parseFailed": false
+        }
+      },
+      {
+        "name": "production-build",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E frontend@0.1.0 build\r\n\u003E next build\r\n\r\n\u25B2 Next.js 16.4.3 (Turbopack)\r\n\u2713 Running next.config.ts took 50ms\r\n\r\n  Creating an optimized production build ...\r\n\u2713 Compiled successfully in 1400ms\r\n  Running TypeScript ...\r\n  Finished TypeScript in 3.0s ...\r\n  Collecting page data using 11 workers ...\r\n  Generating static pages using 11 workers (0/11) ...\r\n  Generating static pages using 11 workers (2/11) \r\n  Generating static pages using 11 workers (5/11) \r\n  Generating static pages using 11 workers (8/11) \r\n\u2713 Generating static pages using 11 workers (11/11) in 813ms\r\n  Finalizing page optimization ...\r\n\r\nRoute (app)\r\n\u250C \u25CB /\r\n\u251C \u25CB /_not-found\r\n\u251C \u25CB /admin\r\n\u251C \u25CB /auditor\r\n\u251C \u25CB /auth/callback\r\n\u251C \u25CB /doctor\r\n\u251C \u25CB /login\r\n\u251C \u0192 /login/[role]\r\n\u251C \u25CB /patient\r\n\u2514 \u25CB /patient/onboarding\r\n\r\n\r\n\u25CB  (Static)   prerendered as static content\r\n\u0192  (Dynamic)  server-rendered on demand\r\n\r\n",
+        "durationMs": 11472
+      },
+      {
+        "name": "home-page-responds",
+        "kind": "http-probe",
+        "verificationMethod": "http-status",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": null,
+        "outputSample": "HTTP 200\n\u003C!DOCTYPE html\u003E\u003Chtml lang=\u0022en\u0022\u003E\u003Chead\u003E\u003Cmeta charSet=\u0022utf-8\u0022/\u003E\u003Cmeta name=\u0022viewport\u0022 content=\u0022width=device-width, initial-scale=1\u0022/\u003E\u003Clink rel=\u0022stylesheet\u0022 href=\u0022/_next/static/chunks/%5Broot-of-the-server%5D__1_cxnk774ga_z._.css\u0022 data-precedence=\u0022next_static/chunks/[root-of-the-server]__1_cxnk774ga_z._.css\u0022/\u003E\u003Clink rel=\u0022preload\u0022 as=\u0022script\u0022 fetchPriority=\u0022low\u0022 href=\u0022/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0qva5cupmdgep._.js\u0022/\u003E\u003Cscript src=\u0022/_next/static/chunks/1daa_next_dist_compiled_react-dom_cjs_react-dom-client_development_0mp0cp_t-ezj9.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/1q96_modules_next_dist_compiled_react-dom_cjs_react-dom_development_1sqry0_53krp4.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_dist_compiled_react-dom_0grqycjrj6mju._.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_164kp-67asdr9._.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_090k2jmam7qwg.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_dist_compiled_1amofcmz--cdp._.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_dist_client_1wygxxh5rwq0t._.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_dist_05y3oi5z9mc_3._.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_%40swc_helpers_cjs_1r9vbqwj2323d._.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/_1anvha4rlo79g._.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/turbopack-_06rkbud3pyrlm._.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/_219uq1sj0q91c._.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_200e689oek-cn._.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/src_lib_query-provider_tsx_0sf5tzcrjyzrj._.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_dist_0g9334r_v7-d9._.js\u0022 async=\u0022\u0022\u003E\u003C/script\u003E\u003Ctitle\u003EHealthNet\u003C/title\u003E\u003Cmeta name=\u0022description\u0022 content=\u0022Global Federated Health Identity \u0026amp; Interoperability Network\u0022/\u003E\u003Clink rel=\u0022icon\u0022 href=\u0022/favicon.ico?favicon.2vob68tjqpejf.ico\u0022 sizes=\u0022256x256\u0022 type=\u0022image/x-icon\u0022/\u003E\u003Cmeta name=\u0022next-size-adjust\u0022 content=\u0022\u0022/\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_dist_build_polyfills_polyfill-nomodule.js\u0022 noModule=\u0022\u0022\u003E\u003C/script\u003E\u003C/head\u003E\u003Cbody class=\u0022inter_5972bc34-module__OU16Qa__className\u0022\u003E\u003Cdiv hidden=\u0022\u0022\u003E\u003C!--$--\u003E\u003C!--/$--\u003E\u003C/div\u003E\u003Cmain class=\u0022min-h-screen bg-slate-950 text-slate-100\u0022\u003E\u003Cdiv class=\u0022mx-auto max-w-6xl px-6 py-16\u0022\u003E\u003Cdiv class=\u0022mb-12 text-center\u0022\u003E\u003Cp class=\u0022text-sm font-semibold uppercase tracking-wider text-cyan-400\u0022\u003EHealthNet\u003C/p\u003E\u003Ch1 class=\u0022mt-2 text-4xl font-bold text-white\u0022\u003EFederated Health Network\u003C/h1\u003E\u003Cp class=\u0022mx-auto mt-3 max-w-2xl text-slate-300\u0022\u003EOne permanent identity, distributed clinical records, consent-gated access, FHIR interoperability and auditable trust.\u003C/p\u003E\u003C/div\u003E\u003Cdiv class=\u0022grid gap-5 md:grid-cols-2\u0022\u003E\u003Ca class=\u0022rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-lg transition hover:-translate-y-0.5 hover:border-cyan-500 hover:shadow-cyan-950/40\u0022 href=\u0022/login/patient\u0022\u003E\u003Ch2 class=\u0022text-xl font-semibold text-white\u0022\u003EPatient Portal\u003C/h2\u003E\u003Cp class=\u0022mt-2 text-sm text-slate-300\u0022\u003EIdentity, consent and emergency profile\u003C/p\u003E\u003Cspan class=\u0022mt-5 inline-block text-sm font-semibold text-cyan-400\u0022\u003ESecure sign-in \u2192\u003C/span\u003E\u003C/a\u003E\u003Ca class=\u0022rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-lg transition hover:-translate-y-0.5 hover:border-cyan-500 hover:shadow-cyan-950/40\u0022 href=\u0022/login/provider\u0022\u003E\u003Ch2 class=\u0022text-xl font-semibold text-white\u0022\u003EDoctor Portal\u003C/h2\u003E\u003Cp class=\u0022mt-2 text-sm text-slate-300\u0022\u003EAuthorized federated longitudinal health view\u003C/p\u003E\u003Cspan class=\u0022mt-5 inline-block text-sm font-semibold text-cyan-400\u0022\u003ESecure sign-in \u2192\u003C/span\u003E\u003C/a\u003E\u003Ca class=\u0022rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-lg transition hover:-translate-y-0.5 hover:border-cyan-500 hover:shadow-cyan-950/40\u0022 href=\u0022/login/admin\u0022\u003E\u003Ch2 class=\u0022text-xl font-semibold text-white\u0022\u003EAdmin Portal\u003C/h2\u003E\u003Cp clas\n\u2026[truncated]",
+        "durationMs": 100
+      }
+    ],
+    "executions": [
+      {
+        "source": "typescript-no-emit",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npx.CMD",
+        "args": [
+          "tsc",
+          "--noEmit"
+        ],
+        "cwd": "C:\\Users\\KIIT0001\\OneDrive\\Desktop\\projects\\MiniProject\\Healthnet\\frontend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "frontend-lint",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "run",
+          "lint"
+        ],
+        "cwd": "C:\\Users\\KIIT0001\\OneDrive\\Desktop\\projects\\MiniProject\\Healthnet\\frontend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "tests-pass",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "test"
+        ],
+        "cwd": "C:\\Users\\KIIT0001\\OneDrive\\Desktop\\projects\\MiniProject\\Healthnet\\frontend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "production-build",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "run",
+          "build"
+        ],
+        "cwd": "C:\\Users\\KIIT0001\\OneDrive\\Desktop\\projects\\MiniProject\\Healthnet\\frontend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "home-page-responds",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "run",
+          "dev",
+          "--",
+          "--hostname",
+          "127.0.0.1"
+        ],
+        "cwd": "C:\\Users\\KIIT0001\\OneDrive\\Desktop\\projects\\MiniProject\\Healthnet\\frontend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      }
+    ]
+  }
+}

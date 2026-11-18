@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
     SECRET_KEY: str = "dev_secret_key_changeme"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    BREAK_GLASS_TTL_MINUTES: int = 15
 
     @model_validator(mode="after")
     def require_production_secrets(self):
@@ -49,4 +50,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

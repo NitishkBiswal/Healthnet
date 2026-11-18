@@ -1,9 +1,11 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.identity.models import PatientIdentity
 from app.migration.schemas import (
     TransferAuthorizationRequest,
     TransferExecuteRequest,
@@ -11,7 +13,7 @@ from app.migration.schemas import (
     TransferRequestCreate,
     TransferStatus,
 )
-from app.migration.service import MigrationService
+from app.migration.service import MigrationService, TransferExecutionError
 from app.security.dependencies import get_current_user
 from app.security.rbac import Role
 
@@ -66,7 +68,19 @@ async def get_transfer_status(
     if item is None:
         raise HTTPException(404, "Transfer request not found")
     requested_by = item.requested_by
-    if Role.ADMIN.value not in user.get("roles", []) and str(user.get("sub")) != requested_by:
+    patient = await session.scalar(
+        select(PatientIdentity).where(
+            PatientIdentity.display_health_id == item.health_id,
+            PatientIdentity.owner_subject == user.get("sub"),
+        )
+    )
+    roles = set(user.get("roles", []))
+    if (
+        Role.ADMIN.value not in roles
+        and Role.SYSTEM.value not in roles
+        and str(user.get("sub")) != requested_by
+        and patient is None
+    ):
         raise HTTPException(403, "You are not allowed to view this transfer")
     return item
 
@@ -135,3 +149,5 @@ async def execute_transfer(
     except ValueError as exc:
         await session.rollback()
         raise HTTPException(400, str(exc)) from exc
+    except TransferExecutionError as exc:
+        raise HTTPException(502, str(exc)) from exc

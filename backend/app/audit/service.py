@@ -13,8 +13,17 @@ class AuditService:
         x=AuditEvent(event_type=request.event_type.value,health_id=request.health_id,actor_id=request.actor_id,action=request.action,payload=payload,prev_event_hash=prev or None,event_hash=digest)
         self.session.add(x);await self.session.flush();return x
     async def get_event(self,event_id:UUID):return await self.session.get(AuditEvent,event_id)
-    async def get_patient_events(self,health_id:str):
-        result=await self.session.execute(select(AuditEvent).where(AuditEvent.health_id==health_id).order_by(AuditEvent.created_at));return list(result.scalars())
+    async def get_patient_events(
+        self, health_id: str, limit: int = 50, offset: int = 0
+    ):
+        result = await self.session.execute(
+            select(AuditEvent)
+            .where(AuditEvent.health_id == health_id)
+            .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(result.scalars())
     async def verify_chain_integrity(self):
         result=await self.session.execute(select(AuditEvent).order_by(AuditEvent.created_at,AuditEvent.id));previous=""
         for x in result.scalars():

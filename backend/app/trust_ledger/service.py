@@ -1,6 +1,6 @@
 import hashlib
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.trust_ledger.models import TrustLedgerEntry
 from app.trust_ledger.schemas import FORBIDDEN_FIELDS, LedgerEntryCreate
@@ -18,6 +18,9 @@ class TrustLedgerService:
 
     async def record_entry(self, request: LedgerEntryCreate) -> TrustLedgerEntry:
         self._validate_no_phi(request)
+        connection = await self.session.connection()
+        if connection.dialect.name == "postgresql":
+            await self.session.execute(text("SELECT pg_advisory_xact_lock(73194201)"))
         previous = await self.session.scalar(select(TrustLedgerEntry).order_by(TrustLedgerEntry.timestamp.desc(), TrustLedgerEntry.id.desc()))
         previous_hash = previous.entry_hash if previous else ""
         canonical = "|".join([previous_hash, request.transaction_id, request.event_type.value, request.opaque_subject_reference, str(request.source_repository_id or ""), str(request.destination_repository_id or ""), request.authorization_reference, request.package_hash, request.status, request.audit_reference or ""])

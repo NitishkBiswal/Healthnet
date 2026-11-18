@@ -2,16 +2,36 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type Provider, type Repository } from "@/lib/api";
+import {
+  api,
+  type Jurisdiction,
+  type PolicyRule,
+  type Provider,
+  type Repository,
+  type Transfer,
+} from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
 export default function AdminPortal() {
   const [repos, setRepos] = useState<Repository[]>([]);
+  const [repoOffset, setRepoOffset] = useState(0);
+  const [hasMoreRepos, setHasMoreRepos] = useState(false);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [jurisdictions, setJurisdictions] = useState<Jurisdiction[]>([]);
+  const [policyRules, setPolicyRules] = useState<PolicyRule[]>([]);
+  const [policyForm, setPolicyForm] = useState({
+    jurisdiction_code: "IN-OD", name: "", purpose: "TREATMENT", scope: "clinical",
+    effect: "ALLOW" as "ALLOW" | "DENY", description: "",
+  });
+  const [ledgerIntegrity, setLedgerIntegrity] = useState<{ valid: boolean; entries_checked: number } | null>(null);
+  const [transfer, setTransfer] = useState<Transfer | null>(null);
+  const [transferLookupId, setTransferLookupId] = useState("");
+  const [transferToken, setTransferToken] = useState("");
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [transferMessage, setTransferMessage] = useState("");
   const [healthId, setHealthId] = useState("");
   const [source, setSource] = useState("");
   const [destination, setDestination] = useState("");
-  const [result, setResult] = useState<unknown>(null);
   const [error, setError] = useState("");
   const [changeHealthId, setChangeHealthId] = useState("");
   const [changeRepositoryId, setChangeRepositoryId] = useState("");
@@ -26,6 +46,7 @@ export default function AdminPortal() {
   const [licenseNumber, setLicenseNumber] = useState("");
   const [jurisdiction, setJurisdiction] = useState("IN-OD");
   const [providerMessage, setProviderMessage] = useState("");
+  const [confirmRepositoryChange, setConfirmRepositoryChange] = useState(false);
 
   async function loadProviders() {
     try {
@@ -39,8 +60,19 @@ export default function AdminPortal() {
     let active = true;
     async function loadRepositories() {
       try {
-        const repositories = await api.repositories();
+        const [repositories, initialJurisdictions, initialRules, integrity] = await Promise.all([
+          api.repositories(0, 50),
+          api.jurisdictions(),
+          api.policyRules(),
+          api.verifyLedger(),
+        ]);
         if (active) setRepos(repositories);
+        if (active) {
+          setHasMoreRepos(repositories.length === 50);
+          setJurisdictions(initialJurisdictions);
+          setPolicyRules(initialRules);
+          setLedgerIntegrity(integrity);
+        }
       } catch (reason: unknown) {
         if (active) setError(reason instanceof Error ? reason.message : "Could not load repositories");
       }
@@ -65,7 +97,12 @@ export default function AdminPortal() {
       return;
     }
     const target = repos.find((repository) => repository.id === changeRepositoryId);
-    if (!target || !window.confirm(`Validate and switch ${changeHealthId.trim()} to ${target.name}? Existing records will remain in place.`)) return;
+    if (!target) return;
+    if (!confirmRepositoryChange) {
+      setConfirmRepositoryChange(true);
+      return;
+    }
+    setConfirmRepositoryChange(false);
     setChangeBusy(true);
     try {
       await api.changeRepository(changeHealthId.trim(), changeRepositoryId);
@@ -82,15 +119,94 @@ export default function AdminPortal() {
   async function migrate() {
     setError("");
     try {
-      setResult(await api.createTransfer({
+      const created = await api.createTransfer({
         health_id: healthId,
         source_repository_id: source,
         destination_repository_id: destination,
         purpose: "MIGRATION",
         scope: "FHIR",
-      }));
+      });
+      setTransfer(created);
+      setTransferLookupId(created.id);
+      setTransferToken("");
+      setTransferMessage("Transfer request created. The patient must authorize it before a token can be issued.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Migration request failed");
+    }
+  }
+
+  async function refreshTransferStatus() {
+    const id = transferLookupId.trim() || transfer?.id;
+    if (!id) return;
+    try {
+      const current = await api.transferStatus(id);
+      setTransfer(current);
+      setTransferLookupId(current.id);
+    } catch (reason: unknown) {
+      setTransferMessage(reason instanceof Error ? reason.message : "Unable to load transfer status");
+    }
+  }
+
+  async function loadMoreRepositories() {
+    const nextOffset = repoOffset + 50;
+    try {
+      const next = await api.repositories(nextOffset, 50);
+      setRepos((current) => [...current, ...next]);
+      setRepoOffset(nextOffset);
+      setHasMoreRepos(next.length === 50);
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to load more repositories");
+    }
+  }
+
+  async function addPolicyRule() {
+    try {
+      const rule = await api.addPolicyRule(policyForm);
+      setPolicyRules((current) => [...current, rule].sort((a, b) => a.name.localeCompare(b.name)));
+      setPolicyForm((current) => ({ ...current, name: "", description: "" }));
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to add policy rule");
+    }
+  }
+
+  async function deactivatePolicyRule(id: string) {
+    try {
+      const updated = await api.deactivatePolicyRule(id);
+      setPolicyRules((current) => current.map((rule) => rule.id === id ? updated : rule));
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to disable policy rule");
+    }
+  }
+
+  async function issueTransferToken() {
+    if (!transfer) return;
+    setTransferBusy(true);
+    setTransferMessage("");
+    try {
+      const issued = await api.issueTransferToken(transfer.id);
+      setTransferToken(issued.authorization_token);
+      setTransfer((current) => current ? { ...current, state: "TRANSFER_AUTH_ISSUED" } : current);
+      setTransferMessage(`Token expires ${new Date(issued.expires_at).toLocaleString()}. It is only held in this browser session.`);
+    } catch (reason: unknown) {
+      setTransferMessage(reason instanceof Error ? reason.message : "Patient authorization is required before token issuance.");
+    } finally {
+      setTransferBusy(false);
+    }
+  }
+
+  async function executeTransfer() {
+    if (!transfer || !transferToken) return;
+    setTransferBusy(true);
+    setTransferMessage("");
+    try {
+      const manifest = await api.executeTransfer(transfer.id, transferToken);
+      setTransfer((current) => current ? { ...current, state: "COMPLETED", package_hash: manifest.package_hash } : current);
+      setTransferMessage(`Transfer completed. ${manifest.resource_count} resources imported and hash-verified.`);
+      setTransferToken("");
+    } catch (reason: unknown) {
+      setTransferMessage(reason instanceof Error ? reason.message : "FHIR transfer failed");
+    } finally {
+      setTransferBusy(false);
     }
   }
 
@@ -178,6 +294,7 @@ export default function AdminPortal() {
                   </p>
                 </div>
               ))}
+              {hasMoreRepos && <button onClick={() => void loadMoreRepositories()} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">Load more repositories</button>}
             </div>
           </Card>
 
@@ -211,14 +328,62 @@ export default function AdminPortal() {
               <button onClick={migrate} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">
                 Create migration request
               </button>
-              {result !== null && (
-                <pre className="overflow-auto rounded-lg border-2 border-slate-300 bg-slate-100 p-3 text-xs font-medium text-slate-900">
-                  {JSON.stringify(result, null, 2)}
-                </pre>
-              )}
+              {transfer && <div className="rounded-lg border border-cyan-300 bg-cyan-50 p-3 text-sm">
+                <p className="font-semibold">Transfer {transfer.id}</p>
+                <p className="mt-1">Status: {transfer.state}</p>
+                <p className="mt-1 text-slate-700">Give this ID to the patient so they can authorize the request in their portal.</p>
+                <button onClick={() => void issueTransferToken()} disabled={transferBusy || transfer.state !== "PATIENT_AUTHORIZED"} className="mt-3 rounded-lg border border-slate-400 px-3 py-2 text-sm font-semibold disabled:opacity-50">
+                  Issue one-time transfer token
+                </button>
+                <button onClick={() => void executeTransfer()} disabled={transferBusy || !transferToken} className="ml-2 mt-3 rounded-lg bg-cyan-800 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">
+                  {transferBusy ? "Transferring…" : "Export, verify, and import"}
+                </button>
+                <button onClick={() => void refreshTransferStatus()} className="ml-2 mt-3 rounded-lg border border-slate-400 px-3 py-2 text-sm font-semibold">Refresh status</button>
+                {transferMessage && <p className="mt-2">{transferMessage}</p>}
+              </div>}
+              <div className="flex gap-2">
+                <Field value={transferLookupId} onChange={(event) => setTransferLookupId(event.target.value)} placeholder="Existing transfer ID" />
+                <button onClick={() => void refreshTransferStatus()} className="rounded-lg border border-slate-400 px-3 py-2 text-sm font-semibold">Load</button>
+              </div>
             </div>
           </Card>
         </div>
+      </div>
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <Card title="Jurisdiction policy rules">
+          <div className="grid gap-3 md:grid-cols-2">
+            <select value={policyForm.jurisdiction_code} onChange={(event) => setPolicyForm((current) => ({ ...current, jurisdiction_code: event.target.value }))} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              {jurisdictions.map((item) => <option key={item.id} value={item.code}>{item.code} — {item.name}</option>)}
+            </select>
+            <Field value={policyForm.name} onChange={(event) => setPolicyForm((current) => ({ ...current, name: event.target.value }))} placeholder="Rule name" />
+            <Field value={policyForm.purpose} onChange={(event) => setPolicyForm((current) => ({ ...current, purpose: event.target.value }))} placeholder="Purpose" />
+            <Field value={policyForm.scope} onChange={(event) => setPolicyForm((current) => ({ ...current, scope: event.target.value }))} placeholder="Scope" />
+            <select value={policyForm.effect} onChange={(event) => setPolicyForm((current) => ({ ...current, effect: event.target.value as "ALLOW" | "DENY" }))} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              <option value="ALLOW">Allow</option><option value="DENY">Deny</option>
+            </select>
+            <Field value={policyForm.description} onChange={(event) => setPolicyForm((current) => ({ ...current, description: event.target.value }))} placeholder="Description (optional)" />
+          </div>
+          <button onClick={() => void addPolicyRule()} disabled={!policyForm.name.trim()} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Add policy rule</button>
+          <ul className="mt-4 space-y-2">
+            {policyRules.map((rule) => {
+              const jurisdictionName = jurisdictions.find((item) => item.id === rule.jurisdiction_id);
+              return <li key={rule.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-300 p-3 text-sm">
+                <span><strong>{rule.name}</strong> · {jurisdictionName?.code ?? "Unknown"} · {rule.purpose}/{rule.scope} · {rule.effect} · {rule.active ? "Active" : "Disabled"}</span>
+                {rule.active && <button onClick={() => void deactivatePolicyRule(rule.id)} className="rounded-lg border border-red-300 px-3 py-1 text-xs font-semibold text-red-700">Disable</button>}
+              </li>;
+            })}
+          </ul>
+        </Card>
+        <Card title="Trust ledger integrity">
+          {ledgerIntegrity ? (
+            <div className={ledgerIntegrity.valid ? "rounded-lg border border-emerald-300 bg-emerald-50 p-4" : "rounded-lg border border-red-300 bg-red-50 p-4"}>
+              <p className="font-bold">{ledgerIntegrity.valid ? "Ledger verified" : "Ledger integrity check failed"}</p>
+              <p className="mt-1 text-sm">{ledgerIntegrity.entries_checked} entries checked</p>
+            </div>
+          ) : <p className="text-sm text-slate-600">Ledger verification is loading.</p>}
+          <button onClick={() => void api.verifyLedger().then(setLedgerIntegrity).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Ledger verification failed"))} className="mt-3 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">Verify now</button>
+        </Card>
       </div>
 
       {error && (
@@ -226,6 +391,16 @@ export default function AdminPortal() {
           {error}
         </p>
       )}
+      {confirmRepositoryChange && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+        <section role="dialog" aria-modal="true" aria-labelledby="repository-confirm-title" className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+          <h2 id="repository-confirm-title" className="text-lg font-bold">Confirm repository switch</h2>
+          <p className="mt-2 text-sm text-slate-700">Switch {changeHealthId} to {repos.find((item) => item.id === changeRepositoryId)?.name}? Existing records are not moved.</p>
+          <div className="mt-5 flex justify-end gap-3">
+            <button onClick={() => setConfirmRepositoryChange(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</button>
+            <button onClick={() => void changeRepository()} disabled={changeBusy} className="rounded-lg bg-cyan-800 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Confirm switch</button>
+          </div>
+        </section>
+      </div>}
     </PortalShell>
   );
 }

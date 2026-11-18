@@ -121,8 +121,18 @@ def test_repository_change_is_committed_only_after_validation(monkeypatch):
     async def validated_url(base_url):
         assert base_url == target.base_url
 
+    recorded_ledger_entries = []
+
+    class Ledger:
+        def __init__(self, _session):
+            pass
+
+        async def record_entry(self, request):
+            recorded_ledger_entries.append(request)
+
     monkeypatch.setattr("app.repository.service.validate_repository_url", validated_url)
     monkeypatch.setattr("app.repository.service.FHIRClient", lambda base_url: ValidatedFHIR(base_url))
+    monkeypatch.setattr("app.repository.service.TrustLedgerService", Ledger)
     session = Session()
     replacement = asyncio.run(
         RepositoryService(session).change_custody_repository(
@@ -135,6 +145,8 @@ def test_repository_change_is_committed_only_after_validation(monkeypatch):
     assert replacement.health_id == "INOD000001"
     assert replacement.repository_id == target.id
     assert any(isinstance(item, EHRCustody) for item in session.added)
+    assert len(recorded_ledger_entries) == 1
+    assert recorded_ledger_entries[0].event_type.value == "CUSTODY_SWITCHED"
 
 
 def test_patient_may_authorize_only_owned_transfer():

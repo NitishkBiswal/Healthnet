@@ -2,21 +2,45 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type AuthorizedPatient, type Principal } from "@/lib/api";
+import {
+  api,
+  type AuthorizedPatient,
+  type BreakGlassGrant,
+  type Principal,
+  type ProvenanceResource,
+} from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
 export default function DoctorPortal() {
   const [healthId, setHealthId] = useState("");
   const [purpose, setPurpose] = useState("TREATMENT");
   const [scope, setScope] = useState("clinical");
-  const [result, setResult] = useState<unknown>(null);
+  const [result, setResult] = useState<Awaited<ReturnType<typeof api.longitudinal>> | null>(null);
   const [error, setError] = useState("");
   const [authorized, setAuthorized] = useState<AuthorizedPatient[]>([]);
+  const [authorizedOffset, setAuthorizedOffset] = useState(0);
+  const [hasMoreAuthorized, setHasMoreAuthorized] = useState(false);
   const [principal, setPrincipal] = useState<Principal | null>(null);
   const [resourceType, setResourceType] = useState("Observation");
   const [resourceJson, setResourceJson] = useState("");
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [loadingView, setLoadingView] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [resourceTypes, setResourceTypes] = useState<string[]>([]);
+  const [breakGlassReason, setBreakGlassReason] = useState("");
+  const [breakGlass, setBreakGlass] = useState<BreakGlassGrant | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [provenance, setProvenance] = useState<ProvenanceResource[]>([]);
+
+  useEffect(() => {
+    if (!breakGlass) return;
+    const updateTime = () => setCurrentTime(Date.now());
+    updateTime();
+    const timer = window.setInterval(updateTime, 1000);
+    return () => window.clearInterval(timer);
+  }, [breakGlass]);
 
   useEffect(() => {
     let active = true;
@@ -24,11 +48,12 @@ export default function DoctorPortal() {
       try {
         const [initialPrincipal, initialPatients] = await Promise.all([
           api.currentPrincipal(),
-          api.authorizedPatients(),
+          api.authorizedPatients(0, 50),
         ]);
         if (active) {
           setPrincipal(initialPrincipal);
           setAuthorized(initialPatients);
+          setHasMoreAuthorized(initialPatients.length === 50);
         }
       } catch (reason: unknown) {
         if (active) setError(reason instanceof Error ? reason.message : "Unable to load doctor workspace");
@@ -74,10 +99,68 @@ export default function DoctorPortal() {
       return;
     }
     try {
-      setResult(await api.longitudinal(healthId, purpose, scope));
+      setLoadingView(true);
+      const activeGrant = breakGlass
+        && breakGlass.health_id === healthId
+        && Date.parse(breakGlass.expires_at) > Date.now()
+        ? breakGlass
+        : null;
+      setResult(await api.longitudinal(healthId, purpose, scope, {
+        from_date: fromDate || undefined,
+        to_date: toDate || undefined,
+        resource_types: resourceTypes,
+        breakGlassToken: activeGrant?.authorization_token,
+      }));
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "Authorization or retrieval failed");
+    } finally {
+      setLoadingView(false);
     }
+  }
+
+  async function invokeBreakGlass() {
+    setError("");
+    if (!healthId.trim() || breakGlassReason.trim().length < 5) {
+      setError("Select an authorized patient and provide an emergency reason.");
+      return;
+    }
+    try {
+      const grant = await api.breakGlass(healthId.trim(), breakGlassReason.trim());
+      setBreakGlass(grant);
+      setPurpose("EMERGENCY");
+      setScope("clinical");
+      setBreakGlassReason("");
+      setError("");
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to invoke emergency access");
+    }
+  }
+
+  async function loadMoreAuthorized() {
+    const nextOffset = authorizedOffset + 50;
+    try {
+      const next = await api.authorizedPatients(nextOffset, 50);
+      setAuthorized((current) => [...current, ...next]);
+      setAuthorizedOffset(nextOffset);
+      setHasMoreAuthorized(next.length === 50);
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to load more patients");
+    }
+  }
+
+  async function loadProvenance() {
+    setError("");
+    try {
+      setProvenance(await api.provenance(healthId));
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to load record history");
+    }
+  }
+
+  function toggleResourceType(resourceType: string) {
+    setResourceTypes((current) => current.includes(resourceType)
+      ? current.filter((value) => value !== resourceType)
+      : [...current, resourceType]);
   }
 
   return (
@@ -121,6 +204,8 @@ export default function DoctorPortal() {
                   setPurpose(patient.purpose);
                   setScope(patient.scopes[0] ?? "clinical");
                   setResult(null);
+                  setBreakGlass(null);
+                  setProvenance([]);
                   setError("");
                 }}
                 className="block w-full rounded-xl border border-slate-300 p-4 text-left hover:bg-slate-50"
@@ -142,6 +227,11 @@ export default function DoctorPortal() {
               </button>
             ))}
           </div>
+        )}
+        {hasMoreAuthorized && (
+          <button onClick={() => void loadMoreAuthorized()} className="mt-3 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+            Load more patients
+          </button>
         )}
       </Card>
 
@@ -174,19 +264,77 @@ export default function DoctorPortal() {
           <Field value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Purpose" />
           <Field value={scope} onChange={(e) => setScope(e.target.value)} placeholder="Scope" />
         </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <label className="text-sm font-medium text-slate-700">From date
+            <Field type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+          </label>
+          <label className="text-sm font-medium text-slate-700">To date
+            <Field type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+          </label>
+        </div>
+        <fieldset className="mt-3">
+          <legend className="text-sm font-semibold">FHIR resource types (optional)</legend>
+          <div className="mt-2 flex flex-wrap gap-3">
+            {["Observation", "Condition", "MedicationRequest", "Encounter", "Procedure", "DiagnosticReport", "Immunization", "AllergyIntolerance"].map((type) => (
+              <label key={type} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={resourceTypes.includes(type)} onChange={() => toggleResourceType(type)} />
+                {type}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <button
-          onClick={load}
+          onClick={() => void load()}
           disabled={!healthId}
           className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Request longitudinal view
+          {loadingView ? "Loading records…" : "Request longitudinal view"}
         </button>
+        <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4">
+          <h3 className="font-semibold text-amber-950">Emergency break-glass access</h3>
+          <p className="mt-1 text-sm text-amber-900">
+            Grants this provider temporary, audited access to this patient&apos;s clinical records for 15 minutes. The patient is notified.
+          </p>
+          <Field
+            value={breakGlassReason}
+            onChange={(event) => setBreakGlassReason(event.target.value)}
+            placeholder="Document the emergency reason"
+            className="mt-3"
+          />
+          <button onClick={() => void invokeBreakGlass()} disabled={!healthId || breakGlassReason.trim().length < 5} className="mt-3 rounded-lg bg-amber-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+            Invoke break-glass
+          </button>
+          {breakGlass && Date.parse(breakGlass.expires_at) > currentTime && breakGlass.health_id === healthId && (
+            <p className="mt-2 text-sm font-semibold text-amber-950">
+              Emergency access active until {new Date(breakGlass.expires_at).toLocaleTimeString()}. Request an EMERGENCY-purpose longitudinal view to use it.
+            </p>
+          )}
+        </div>
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-        {result !== null && (
-          <pre className="mt-4 max-h-[520px] overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-100">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        )}
+        {result !== null && <div className="mt-4 space-y-3">
+          <p className="text-sm font-semibold">Status: {result.completeness} · {result.repositories_available}/{result.repositories_checked} repositories</p>
+          {result.records.map((record, index) => {
+            const resource = record.resource;
+            const title = (resource.code as { text?: string } | undefined)?.text
+              || (resource.medicationCodeableConcept as { text?: string } | undefined)?.text
+              || `${record.resource_type} record`;
+            const date = String(resource.effectiveDateTime || resource.issued || resource.recorded || resource.date || "");
+            return <details key={`${record.repository}-${record.resource_type}-${String(resource.id ?? index)}`} className="rounded-lg border border-slate-300 p-4">
+              <summary className="cursor-pointer font-semibold">{title} · {record.resource_type} · {record.repository}{date ? ` · ${date}` : ""}</summary>
+              <pre className="mt-3 max-h-80 overflow-auto rounded bg-slate-950 p-3 text-xs text-slate-100">{JSON.stringify(resource, null, 2)}</pre>
+            </details>;
+          })}
+          {result.errors.map((message, index) => <p key={`${index}-${message}`} className="text-sm text-amber-800">{message}</p>)}
+        </div>}
+        <div className="mt-5">
+          <button onClick={() => void loadProvenance()} disabled={!healthId} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">Load record history</button>
+          {provenance.length > 0 && <ol className="mt-3 space-y-2 border-l-2 border-cyan-300 pl-4">
+            {provenance.map((entry) => <li key={entry.id} className="text-sm">
+              <span className="font-semibold">{entry.activity.coding?.[0]?.display ?? "Record change"}</span>
+              <span className="ml-2 text-slate-600">{entry.target[0]?.reference} · {new Date(entry.recorded).toLocaleString()}</span>
+            </li>)}
+          </ol>}
+        </div>
       </Card>
     </PortalShell>
   );

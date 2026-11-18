@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -16,11 +16,14 @@ async def longitudinal_view(
     request: LongitudinalViewRequest,
     user: dict[str, Any] = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
+    break_glass_token: str | None = Header(default=None, alias="X-Break-Glass-Token"),
 ) -> LongitudinalViewResponse:
     try:
-        return await LongitudinalViewService(session).build_longitudinal_view(
-            request, user
+        response = await LongitudinalViewService(session).build_longitudinal_view(
+            request, user, break_glass_token
         )
+        await session.commit()
+        return response
     except LongitudinalAccessDenied as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

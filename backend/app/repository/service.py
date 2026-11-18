@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import ipaddress
 from datetime import UTC, datetime
 from urllib.parse import urlsplit
@@ -12,6 +13,8 @@ from app.fhir.client import FHIRClient
 from app.record_locator.models import RecordLocator
 from app.repository.models import EHRCustody, Repository
 from app.repository.schemas import CustodyChangeRequest, CustodyCreate, RepositoryCreate, RepositoryStatus
+from app.trust_ledger.schemas import LedgerEntryCreate, LedgerEventType
+from app.trust_ledger.service import TrustLedgerService
 
 
 async def validate_repository_url(base_url: str) -> None:
@@ -64,8 +67,15 @@ class RepositoryService:
     async def get_repository(self, repository_id: UUID) -> Repository | None:
         return await self.session.get(Repository, repository_id)
 
-    async def list_repositories(self) -> list[Repository]:
-        result = await self.session.execute(select(Repository).order_by(Repository.code))
+    async def list_repositories(
+        self, limit: int = 50, offset: int = 0
+    ) -> list[Repository]:
+        result = await self.session.execute(
+            select(Repository)
+            .order_by(Repository.code)
+            .offset(offset)
+            .limit(limit)
+        )
         return list(result.scalars())
 
     async def check_availability(self, repository: Repository, status: RepositoryStatus) -> Repository:
@@ -90,7 +100,10 @@ class RepositoryService:
         return custody
 
     async def change_custody_repository(
-        self, health_id: str, request: CustodyChangeRequest
+        self,
+        health_id: str,
+        request: CustodyChangeRequest,
+        actor_id: str = "system",
     ) -> EHRCustody:
         target = await self.session.get(Repository, request.repository_id)
         if target is None:
@@ -113,6 +126,7 @@ class RepositoryService:
         active = list(result.scalars())
         if active and active[0].repository_id == target.id:
             return active[0]
+        source_repository_id = active[0].repository_id if active else None
 
         for custody in active:
             custody.custody_end = moment
@@ -146,6 +160,22 @@ class RepositoryService:
         )
         self.session.add(replacement)
         await self.session.flush()
+        await TrustLedgerService(self.session).record_entry(
+            LedgerEntryCreate(
+                transaction_id=str(replacement.id),
+                event_type=LedgerEventType.CUSTODY_SWITCHED,
+                opaque_subject_reference=hashlib.sha256(
+                    health_id.encode()
+                ).hexdigest(),
+                source_repository_id=source_repository_id,
+                destination_repository_id=target.id,
+                authorization_reference=actor_id,
+                package_hash=hashlib.sha256(
+                    f"{health_id}:{source_repository_id}:{target.id}:{moment.isoformat()}".encode()
+                ).hexdigest(),
+                status="COMPLETED",
+            )
+        )
         return replacement
 
     async def get_custody(self, health_id: str) -> list[EHRCustody]:

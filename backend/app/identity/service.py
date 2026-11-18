@@ -2,21 +2,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from difflib import SequenceMatcher
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.identity.models import (
     DuplicateReview,
     DuplicateReviewStatus,
-    IdentityStatus,
     PatientIdentifier,
     PatientIdentity,
     PatientLocationHistory,
 )
 from app.identity.schemas import LocationHistoryRequest, PatientRegistrationRequest
+from app.identity_resolution.models import IdentityMatch
+from app.identity_resolution.service import (
+    IdentityResolutionService,
+    MatchThresholds,
+)
 
 
 @dataclass(frozen=True)
@@ -34,63 +37,15 @@ class IdentityService:
         self.session = session
 
     @staticmethod
-    def _normalise(value: str | None) -> str:
-        return "".join((value or "").lower().split())
-
-    @classmethod
-    def _similarity(cls, request: PatientRegistrationRequest, patient: PatientIdentity) -> float:
-        name = SequenceMatcher(
-            None,
-            cls._normalise(f"{request.given_name}{request.family_name}"),
-            cls._normalise(f"{patient.given_name}{patient.family_name}"),
-        ).ratio()
-        dob = float(request.date_of_birth == patient.date_of_birth)
-        sex = float(bool(request.sex and patient.sex and cls._normalise(request.sex) == cls._normalise(patient.sex)))
-        phone = float(bool(request.phone and patient.phone and cls._normalise(request.phone) == cls._normalise(patient.phone)))
-        email = float(bool(request.email and patient.email and cls._normalise(request.email) == cls._normalise(patient.email)))
-        return round((name * 0.45) + (dob * 0.30) + (sex * 0.05) + (phone * 0.10) + (email * 0.10), 4)
-
-    async def _find_deterministic_match(self, request: PatientRegistrationRequest) -> PatientIdentity | None:
-        for identifier in request.identifiers:
-            result = await self.session.execute(
-                select(PatientIdentity)
-                .join(PatientIdentifier, PatientIdentifier.patient_id == PatientIdentity.id)
-                .where(
-                    PatientIdentity.status == IdentityStatus.ACTIVE.value,
-                    PatientIdentifier.identifier_type == identifier.identifier_type,
-                    func.lower(PatientIdentifier.identifier_value) == self._normalise(identifier.identifier_value),
-                    PatientIdentity.date_of_birth == request.date_of_birth,
-                )
-                .limit(1)
-            )
-            patient = result.scalar_one_or_none()
-            if patient:
-                return patient
-        return None
-
-    async def _candidate_patients(self, request: PatientRegistrationRequest) -> list[PatientIdentity]:
-        result = await self.session.execute(
-            select(PatientIdentity).where(
-                PatientIdentity.status == IdentityStatus.ACTIVE.value,
-                or_(
-                    PatientIdentity.date_of_birth == request.date_of_birth,
-                    func.lower(PatientIdentity.family_name) == self._normalise(request.family_name),
-                ),
-            ).limit(100)
-        )
-        return list(result.scalars().all())
+    def _similarity(request: PatientRegistrationRequest, patient: PatientIdentity) -> float:
+        return IdentityResolutionService._similarity(request, patient, MatchThresholds())
 
     async def match(self, request: PatientRegistrationRequest) -> list[MatchResult]:
-        deterministic = await self._find_deterministic_match(request)
-        if deterministic:
-            return [MatchResult(deterministic, 1.0, "HIGH")]
-        matches = []
-        for patient in await self._candidate_patients(request):
-            confidence = self._similarity(request, patient)
-            if confidence >= self.MEDIUM_CONFIDENCE:
-                band = "HIGH" if confidence >= self.HIGH_CONFIDENCE else "MEDIUM"
-                matches.append(MatchResult(patient, confidence, band))
-        return sorted(matches, key=lambda item: item.confidence, reverse=True)
+        matches = await IdentityResolutionService(self.session).match(request)
+        return [
+            MatchResult(item.patient, item.confidence, item.band)
+            for item in matches
+        ]
 
     @staticmethod
     def health_id_prefix(jurisdiction: str) -> str:
@@ -117,23 +72,35 @@ class IdentityService:
         matches = await self.match(request)
         if matches:
             top = matches[0]
+            outcome = (
+                "DUPLICATE_REVIEW" if top.band == "MEDIUM" else "LIKELY_DUPLICATE"
+            )
             review = None
             if top.band == "MEDIUM":
-                review = DuplicateReview(
-                    candidate_patient_id=top.patient.id,
-                    requesting_subject=requesting_subject,
-                    proposed_given_name=request.given_name,
-                    proposed_family_name=request.family_name,
-                    proposed_date_of_birth=request.date_of_birth,
-                    proposed_sex=request.sex,
-                    proposed_phone=request.phone,
-                    proposed_email=request.email,
-                    proposed_issuing_jurisdiction=request.issuing_jurisdiction,
-                    proposed_identifiers=[identifier.model_dump(mode="json") for identifier in request.identifiers],
-                    confidence=top.confidence,
+                review = await IdentityResolutionService(
+                    self.session
+                ).flag_for_adjudication(
+                    request,
+                    top,
+                    requesting_subject,
                 )
-                self.session.add(review)
-                await self.session.flush()
+            for match in matches:
+                self.session.add(
+                    IdentityMatch(
+                        candidate_health_id=match.patient.display_health_id,
+                        match_method=(
+                            "DETERMINISTIC"
+                            if match.confidence == 1.0
+                            else "PROBABILISTIC"
+                        ),
+                        confidence=match.confidence,
+                        band=match.band,
+                        outcome=outcome,
+                        duplicate_review_id=review.id if review else None,
+                    )
+                )
+            await self.session.flush()
+            if outcome == "DUPLICATE_REVIEW":
                 return "DUPLICATE_REVIEW", None, matches, review
             return "LIKELY_DUPLICATE", None, matches, None
 
@@ -199,15 +166,13 @@ class IdentityService:
         review.reviewed_at = datetime.now(UTC)
         return review
 
-    async def merge_identities(self, source_patient_id: UUID, target_patient_id: UUID) -> PatientIdentity:
-        if source_patient_id == target_patient_id:
-            raise ValueError("Source and target identities must differ")
-        source = await self.session.get(PatientIdentity, source_patient_id)
-        target = await self.session.get(PatientIdentity, target_patient_id)
-        if source is None or target is None:
-            raise ValueError("Both identities must exist")
-        if source.status != IdentityStatus.ACTIVE.value or target.status != IdentityStatus.ACTIVE.value:
-            raise ValueError("Both identities must be active")
-        source.status = IdentityStatus.SUPERSEDED.value
-        source.superseded_by = target.id
-        return target
+    async def merge_identities(
+        self,
+        source_patient_id: UUID,
+        target_patient_id: UUID,
+        authorized_by: str = "system",
+        reviewer_note: str | None = None,
+    ) -> PatientIdentity:
+        return await IdentityResolutionService(self.session).merge_identities(
+            source_patient_id, target_patient_id, authorized_by, reviewer_note
+        )

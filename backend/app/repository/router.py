@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
+from app.api.deps import PaginationParams
 from app.audit.schemas import AuditEventCreate, AuditEventType
 from app.audit.service import AuditService
 from app.identity.models import PatientIdentity
@@ -19,8 +20,17 @@ async def create_repository(request: RepositoryCreate, _: dict = Depends(require
     except ValueError as exc:
         await session.rollback(); raise HTTPException(409, str(exc)) from exc
 @router.get("/repositories", response_model=list[RepositoryInfo])
-async def list_repositories(_: dict = Depends(require_admin), session: AsyncSession = Depends(get_db)):
-    return [RepositoryInfo.model_validate(x) for x in await RepositoryService(session).list_repositories()]
+async def list_repositories(
+    _: dict = Depends(require_admin),
+    session: AsyncSession = Depends(get_db),
+    pagination: PaginationParams = Depends(),
+):
+    return [
+        RepositoryInfo.model_validate(x)
+        for x in await RepositoryService(session).list_repositories(
+            limit=pagination.limit, offset=pagination.offset
+        )
+    ]
 @router.get("/repositories/{repository_id}", response_model=RepositoryInfo)
 async def get_repository(repository_id: UUID, _: dict = Depends(require_admin), session: AsyncSession = Depends(get_db)):
     item = await RepositoryService(session).get_repository(repository_id)
@@ -51,7 +61,9 @@ async def change_custody_repository(
     if patient is None:
         raise HTTPException(404, "Patient not found")
     try:
-        item = await RepositoryService(session).change_custody_repository(health_id, request)
+        item = await RepositoryService(session).change_custody_repository(
+            health_id, request, str(user.get("sub", "unknown"))
+        )
         await AuditService(session).log_event(
             AuditEventCreate(
                 event_type=AuditEventType.REPOSITORY_CHANGE,

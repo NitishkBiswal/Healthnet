@@ -3,7 +3,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.schemas import AuditEventCreate, AuditEventType
+from app.audit.service import AuditService
 from app.consent.service import ConsentService
+from app.emergency.service import EmergencyService
 from app.fhir.client import FHIRClient
 from app.jurisdiction_policy.schemas import PolicyEvaluationRequest
 from app.jurisdiction_policy.service import JurisdictionPolicyService
@@ -31,6 +34,7 @@ class LongitudinalViewService:
         self,
         request: LongitudinalViewRequest,
         user: dict[str, Any],
+        break_glass_token: str | None = None,
     ) -> Provider:
         roles = set(user.get("roles", []))
         if "PROVIDER" not in roles:
@@ -63,6 +67,14 @@ class LongitudinalViewService:
             request.purpose,
             request.scope,
         )
+        if (
+            not consent_allowed
+            and request.purpose == "EMERGENCY"
+            and await EmergencyService(self.session).validate_break_glass(
+                request.health_id, str(subject), break_glass_token
+            )
+        ):
+            consent_allowed = True
         if not consent_allowed:
             raise LongitudinalAccessDenied(
                 "No active patient consent for this purpose and scope"
@@ -74,8 +86,9 @@ class LongitudinalViewService:
         self,
         request: LongitudinalViewRequest,
         user: dict[str, Any],
+        break_glass_token: str | None = None,
     ) -> LongitudinalViewResponse:
-        provider = await self._authorize_doctor(request, user)
+        provider = await self._authorize_doctor(request, user, break_glass_token)
 
         locators = list(
             (
@@ -121,13 +134,30 @@ class LongitudinalViewService:
                 for value in locator.resource_types.split(",")
                 if value.strip()
             ] or ["Observation"]
+            if request.resource_types:
+                requested = set(request.resource_types)
+                resource_types = [
+                    resource_type
+                    for resource_type in resource_types
+                    if resource_type in requested
+                ]
             client = FHIRClient(locator.endpoint or repository.base_url)
 
             for resource_type in resource_types:
                 try:
+                    search_params: dict[str, Any] = {
+                        "subject": f"Patient/{request.health_id}"
+                    }
+                    date_filters = []
+                    if request.from_date:
+                        date_filters.append(f"ge{request.from_date.isoformat()}")
+                    if request.to_date:
+                        date_filters.append(f"le{request.to_date.isoformat()}")
+                    if date_filters:
+                        search_params["date"] = date_filters
                     bundle = await client.search(
                         resource_type,
-                        {"patient": request.health_id},
+                        search_params,
                     )
                     for entry in bundle.get("entry", []):
                         resource = entry.get("resource")
@@ -151,6 +181,20 @@ class LongitudinalViewService:
         else:
             completeness = DataCompleteness.COMPLETE
 
+        await AuditService(self.session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.RETRIEVAL,
+                health_id=request.health_id,
+                actor_id=str(user.get("sub", "unknown")),
+                action="longitudinal patient records retrieved",
+                payload={
+                    "purpose": request.purpose,
+                    "scope": request.scope,
+                    "break_glass_token_provided": bool(break_glass_token),
+                    "repositories_checked": repositories_checked,
+                },
+            )
+        )
         return LongitudinalViewResponse(
             health_id=request.health_id,
             completeness=completeness,

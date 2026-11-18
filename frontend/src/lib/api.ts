@@ -68,6 +68,41 @@ export interface Principal {
 export interface AuditEvent { id: string; event_type: string; health_id?: string; actor_id: string; action: string; payload: string; event_hash: string; created_at: string; }
 export interface Custody { id: string; health_id: string; repository_id: string; resource_types: string[]; custody_start: string; custody_end?: string; }
 export interface Transfer { id: string; health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; state: string; authorization_reference?: string; package_hash?: string; error_message?: string; created_at: string; updated_at: string; }
+export interface EmergencyProfile {
+  health_id: string;
+  blood_group?: string | null;
+  allergies: string[];
+  medications: string[];
+  conditions: string[];
+  emergency_contacts: string[];
+  updated_at?: string | null;
+}
+export interface PatientNotification {
+  id: string; health_id: string; event_type: string; message: string;
+  created_at: string; read_at?: string | null;
+}
+export interface BreakGlassGrant {
+  event_id: string; health_id: string; authorization_token: string; expires_at: string;
+}
+export interface ProvenanceResource {
+  resourceType: "Provenance"; id: string; target: { reference: string }[];
+  recorded: string; agent: Record<string, unknown>[];
+  activity: { coding?: { display?: string }[] };
+  entity: Record<string, unknown>[];
+}
+export interface Jurisdiction { id: string; code: string; name: string; active: boolean; }
+export interface PolicyRule {
+  id: string; jurisdiction_id: string; name: string; purpose: string; scope: string;
+  effect: "ALLOW" | "DENY"; description?: string | null; active: boolean;
+}
+export interface LongitudinalRecord {
+  repository: string; resource_type: string; resource: Record<string, unknown>;
+}
+export interface LongitudinalResult {
+  health_id: string; completeness: "COMPLETE" | "PARTIAL" | "UNAVAILABLE";
+  records: LongitudinalRecord[]; repositories_checked: number;
+  repositories_available: number; errors: string[];
+}
 
 export const api = {
   currentPrincipal: () => request<Principal>("/authorization/me"),
@@ -81,18 +116,51 @@ export const api = {
   createConsent: (body: { health_id: string; grantee_type: string; grantee_id: string; purpose: string; scopes: string[]; valid_from: string; valid_until?: string; reason?: string }) =>
     request<Consent>("/consent/consents", { method: "POST", body: JSON.stringify(body) }),
   revokeConsent: (id: string) => request<Consent>("/consent/consents/" + encodeURIComponent(id), { method: "DELETE" }),
-  consents: (healthId: string) => request<Consent[]>("/consent/patients/" + encodeURIComponent(healthId) + "/consents"),
-  authorizedPatients: () => request<AuthorizedPatient[]>("/consent/authorized-patients"),
+  consents: (healthId: string, offset = 0, limit = 50) =>
+    request<Consent[]>(`/consent/patients/${encodeURIComponent(healthId)}/consents?offset=${offset}&limit=${limit}`),
+  authorizedPatients: (offset = 0, limit = 50) =>
+    request<AuthorizedPatient[]>(`/consent/authorized-patients?offset=${offset}&limit=${limit}`),
   providers: () => request<Provider[]>("/provider-trust/providers"),
   onboardProvider: (body: { username:string; email:string; initial_password:string; given_name:string; family_name:string; license_number:string; jurisdiction:string }) =>
     request<{ provider:Provider; username:string; message:string }>("/provider-trust/providers/onboard",{method:"POST",body:JSON.stringify(body)}),
   createProvider: (body: { external_id: string; given_name: string; family_name: string; license_number: string; jurisdiction: string; keycloak_subject?: string }) =>
     request<Provider>("/provider-trust/providers", { method: "POST", body: JSON.stringify(body) }),
-  emergency: (healthId: string) => request<Record<string, unknown>>("/emergency/patients/" + encodeURIComponent(healthId) + "/emergency-profile"),
-  longitudinal: (healthId: string, purpose = "TREATMENT", scope = "clinical") =>
-    request<Record<string, unknown>>("/longitudinal/patients/longitudinal-view", { method: "POST", body: JSON.stringify({ health_id: healthId, purpose, scope }) }),
-  repositories: () => request<Repository[]>("/repository/repositories"),
-  audits: (healthId: string) => request<AuditEvent[]>("/audit/patient/" + encodeURIComponent(healthId)),
+  emergency: (healthId: string) => request<EmergencyProfile>("/emergency/patients/" + encodeURIComponent(healthId) + "/emergency-profile"),
+  saveEmergency: (healthId: string, body: Omit<EmergencyProfile, "health_id" | "updated_at">) =>
+    request<EmergencyProfile>("/emergency/patients/" + encodeURIComponent(healthId) + "/emergency-profile", { method: "PUT", body: JSON.stringify(body) }),
+  notifications: (healthId: string) =>
+    request<PatientNotification[]>("/emergency/patients/" + encodeURIComponent(healthId) + "/notifications"),
+  breakGlass: (healthId: string, reason: string) =>
+    request<BreakGlassGrant>("/emergency/patients/" + encodeURIComponent(healthId) + "/break-glass", {
+      method: "POST", body: JSON.stringify({ reason, tier: "TIER_1" }),
+    }),
+  longitudinal: (
+    healthId: string,
+    purpose = "TREATMENT",
+    scope = "clinical",
+    options: { from_date?: string; to_date?: string; resource_types?: string[]; breakGlassToken?: string } = {},
+  ) => request<LongitudinalResult>("/longitudinal/patients/longitudinal-view", {
+    method: "POST",
+    body: JSON.stringify({
+      health_id: healthId, purpose, scope,
+      from_date: options.from_date || undefined,
+      to_date: options.to_date || undefined,
+      resource_types: options.resource_types || [],
+    }),
+    headers: options.breakGlassToken ? { "X-Break-Glass-Token": options.breakGlassToken } : {},
+  }),
+  repositories: (offset = 0, limit = 50) =>
+    request<Repository[]>(`/repository/repositories?offset=${offset}&limit=${limit}`),
+  audits: (healthId: string, offset = 0, limit = 50) =>
+    request<AuditEvent[]>(`/audit/patient/${encodeURIComponent(healthId)}?offset=${offset}&limit=${limit}`),
+  provenance: (healthId: string) =>
+    request<ProvenanceResource[]>("/provenance/provenance/" + encodeURIComponent(healthId)),
+  jurisdictions: () => request<Jurisdiction[]>("/jurisdiction-policy/policy/jurisdictions"),
+  policyRules: () => request<PolicyRule[]>("/jurisdiction-policy/policy/rules"),
+  addPolicyRule: (body: Omit<PolicyRule, "id" | "jurisdiction_id" | "active"> & { jurisdiction_code: string }) =>
+    request<PolicyRule>("/jurisdiction-policy/policy/rules", { method: "POST", body: JSON.stringify(body) }),
+  deactivatePolicyRule: (id: string) =>
+    request<PolicyRule>("/jurisdiction-policy/policy/rules/" + encodeURIComponent(id), { method: "DELETE" }),
   verifyLedger: () => request<{ valid: boolean; entries_checked: number }>("/trust-ledger/ledger/verify"),
   createFHIRResource: (resourceType: string, resource: Record<string, unknown>) =>
     request<Record<string, unknown>>("/fhir/" + encodeURIComponent(resourceType), { method: "POST", body: JSON.stringify(resource) }),
@@ -100,5 +168,11 @@ export const api = {
     request<Custody>("/repository/patients/" + encodeURIComponent(healthId) + "/ehr-custody", { method: "PUT", body: JSON.stringify({ repository_id: repositoryId, resource_types: ["FHIR"] }) }),
   createTransfer: (body: { health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string }) =>
     request<Transfer>("/migration/transfer-requests", { method: "POST", body: JSON.stringify(body) }),
-  transferStatus: (id: string) => request<Transfer>("/migration/transfers/" + id + "/status"),
+  authorizeTransfer: (id: string, authorization_reference: string) =>
+    request<Transfer>("/migration/transfer-authorizations/" + encodeURIComponent(id), { method: "POST", body: JSON.stringify({ authorization_reference }) }),
+  issueTransferToken: (id: string) =>
+    request<{ transfer_id: string; authorization_token: string; expires_at: string }>("/migration/transfers/" + encodeURIComponent(id) + "/issue-token", { method: "POST" }),
+  executeTransfer: (id: string, authorization_token: string) =>
+    request<{ id: string; resource_count: number; package_hash: string; validation_status: string }>("/migration/transfers/" + encodeURIComponent(id) + "/execute", { method: "POST", body: JSON.stringify({ authorization_token }) }),
+  transferStatus: (id: string) => request<Transfer>("/migration/transfers/" + encodeURIComponent(id) + "/status"),
 };

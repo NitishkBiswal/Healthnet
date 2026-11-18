@@ -81,16 +81,20 @@ class ConsentService:
             for x in result.scalars()
         )
 
-    async def get_patient_consents(self, health_id: str) -> list[Consent]:
+    async def get_patient_consents(
+        self, health_id: str, limit: int = 50, offset: int = 0
+    ) -> list[Consent]:
         result = await self.session.execute(
             select(Consent)
             .where(Consent.health_id == health_id)
             .order_by(Consent.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
         return list(result.scalars())
 
     async def get_authorized_patients(
-        self, provider_subject: str
+        self, provider_subject: str, limit: int = 50, offset: int = 0
     ) -> list[tuple[Consent, PatientIdentity]]:
         moment = datetime.now(UTC)
         result = await self.session.execute(
@@ -113,5 +117,7 @@ class ConsentService:
                 PatientIdentity.status == "ACTIVE",
             )
             .order_by(PatientIdentity.family_name, PatientIdentity.given_name)
+            .offset(offset)
+            .limit(limit)
         )
         return list(result.all())

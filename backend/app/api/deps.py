@@ -8,10 +8,10 @@ __all__ = ["get_db", "get_redis", "PaginationParams", "get_correlation_id"]
 class PaginationParams:
     def __init__(
         self,
-        skip: int = Query(0, ge=0, description="Skip N items"),
-        limit: int = Query(100, ge=1, le=1000, description="Limit to N items"),
+        offset: int = Query(0, ge=0, description="Skip N items"),
+        limit: int = Query(50, ge=1, le=100, description="Maximum items to return"),
     ):
-        self.skip = skip
+        self.offset = offset
         self.limit = limit
 
 async def get_correlation_id(request: Request) -> str | None:

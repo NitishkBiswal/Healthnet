@@ -11,6 +11,7 @@ class MigrationState(StrEnum):
     POLICY_LEGAL_CHECK = "POLICY_LEGAL_CHECK"
     TRANSFER_AUTH_ISSUED = "TRANSFER_AUTH_ISSUED"
     FHIR_EXPORT = "FHIR_EXPORT"
+    FHIR_IMPORT = "FHIR_IMPORT"
     VALIDATION = "VALIDATION"
     HASH_GENERATION = "HASH_GENERATION"
     ENCRYPTED_TRANSFER = "ENCRYPTED_TRANSFER"
@@ -35,8 +36,7 @@ class TransferAuthorizationRequest(BaseModel):
 
 
 class TransferExecuteRequest(BaseModel):
-    resource_count: int = Field(default=0, ge=0, le=1000000)
-    package_hash: str = Field(min_length=16, max_length=128)
+    authorization_token: str = Field(min_length=32, max_length=256)
 
 
 class TransferStatus(BaseModel):
