@@ -88,6 +88,8 @@ class DuplicateReviewResponse(BaseModel):
 
     id: UUID
     candidate_patient_id: UUID
+    candidate_health_id: str | None = None
+    target_health_id: str | None = None
     review_type: str = "DUPLICATE_REGISTRATION"
     target_patient_id: UUID | None = None
     proposed_address: str | None = None
