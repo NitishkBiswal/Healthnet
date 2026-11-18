@@ -289,8 +289,7 @@ export default function PatientPortal() {
           ) : <p className="mt-4 text-sm text-slate-600">No consent records found. Grant access to a trusted provider above.</p>}
           {emergency !== null && <pre className="mt-4 max-h-80 overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(emergency, null, 2)}</pre>}
           {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
-        </Card>
-      </div>
+        </Card>}
     </PortalShell>
   );
 }
