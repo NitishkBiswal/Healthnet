@@ -10,6 +10,7 @@ from app.security.dependencies import get_current_user, require_role
 from app.security.rbac import Role
 
 router = APIRouter(tags=["Longitudinal"])
+patient_role_dependency = require_role(Role.PATIENT)
 
 
 @router.post("/patients/longitudinal-view", response_model=LongitudinalViewResponse)
@@ -31,7 +32,7 @@ async def longitudinal_view(
 
 @router.get("/patients/me/medical-records", response_model=LongitudinalViewResponse)
 async def my_medical_records(
-    user: dict[str, Any] = Depends(require_role(Role.PATIENT)),
+    user: dict[str, Any] = Depends(patient_role_dependency),
     session: AsyncSession = Depends(get_db),
 ) -> LongitudinalViewResponse:
     try:
