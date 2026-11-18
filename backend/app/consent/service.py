@@ -5,6 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.consent.models import Consent
+from app.consent.dismissal_models import ProviderNoticeDismissal
 from app.consent.schemas import ConsentCreateRequest, ConsentStatus
 from app.identity.models import PatientIdentity
 from app.provider_trust.models import Provider
@@ -113,6 +114,10 @@ class ConsentService:
                 Consent.valid_from <= moment,
                 (Consent.valid_until.is_(None) | (Consent.valid_until >= moment)),
                 PatientIdentity.status == "ACTIVE",
+                ~select(ProviderNoticeDismissal.consent_id).where(
+                    ProviderNoticeDismissal.consent_id == Consent.id,
+                    ProviderNoticeDismissal.provider_subject == provider_subject,
+                ).exists(),
             )
             .order_by(PatientIdentity.family_name, PatientIdentity.given_name)
         )
