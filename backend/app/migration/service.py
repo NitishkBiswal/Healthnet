@@ -70,9 +70,17 @@ class MigrationService:
                 f"Source repository {source.code} is not the patient's current repository"
             )
 
+        completed_count = await self.session.scalar(
+            select(func.count(TransferRequest.id)).where(
+                TransferRequest.health_id == request.health_id,
+                TransferRequest.state == MigrationState.COMPLETED.value,
+            )
+        ) or 0
         item = TransferRequest(
             **request.model_dump(),
             requested_by=actor_id,
+            review_required=completed_count >= 2,
+            review_status="PENDING" if completed_count >= 2 else "NOT_REQUIRED",
             state=MigrationState.REQUESTED.value,
         )
         self.session.add(item)
@@ -96,12 +104,6 @@ class MigrationService:
         )
         if current is None:
             raise ValueError("Your Health ID has no active repository assignment")
-        completed_count = await self.session.scalar(
-            select(func.count(TransferRequest.id)).where(
-                TransferRequest.health_id == patient.display_health_id,
-                TransferRequest.state == MigrationState.COMPLETED.value,
-            )
-        ) or 0
         create = TransferRequestCreate(
             health_id=patient.display_health_id,
             source_repository_id=current.repository_id,
@@ -111,10 +113,6 @@ class MigrationService:
             reason=request.reason.strip(),
         )
         item = await self.initiate_transfer(create, actor_id)
-        # After two successful moves, every subsequent move requires an Auditor.
-        if completed_count >= 2:
-            item.review_required = True
-            item.review_status = "PENDING"
         await self.session.flush()
         await self.session.refresh(item)
         return item
