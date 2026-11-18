@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { api, type AadhaarStatus, type Consent, type CurrentRecordLocation, type DuplicateReview, type Patient, type Transfer } from "@/lib/api";
+import { api, type Consent, type CurrentRecordLocation, type DuplicateReview, type Patient, type Transfer } from "@/lib/api";
 import { Card, PortalShell } from "@/components/portal-shell";
 
 export default function PatientPortal() {
@@ -20,9 +20,9 @@ export default function PatientPortal() {
   const [currentLocation, setCurrentLocation] = useState<CurrentRecordLocation | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [migrationMessage, setMigrationMessage] = useState("");
-  const [aadhaarStatus, setAadhaarStatus] = useState<AadhaarStatus | null>(null);
-  const [aadhaarNumber, setAadhaarNumber] = useState("");
-  const [aadhaarMessage, setAadhaarMessage] = useState("");
+  const [profileForm, setProfileForm] = useState({ given_name: "", family_name: "", date_of_birth: "", sex: "", phone: "", email: "", address: "" });
+  const [profileMessage, setProfileMessage] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
   const [medicalRecords, setMedicalRecords] = useState<Record<string, unknown> | null>(null);
   const [medicalRecordsError, setMedicalRecordsError] = useState("");
   const [recordsLoading, setRecordsLoading] = useState(false);
@@ -31,11 +31,11 @@ export default function PatientPortal() {
   useEffect(() => {
     void api.myPatient().then(async (value) => {
       setPatient(value);
+      setProfileForm({ given_name: value.given_name ?? "", family_name: value.family_name ?? "", date_of_birth: value.date_of_birth ?? "", sex: value.sex ?? "", phone: value.phone ?? "", email: value.email ?? "", address: value.address ?? "" });
       setRecordsLoading(true);
       try { setMedicalRecords(await api.myMedicalRecords()); }
       catch (reason: unknown) { setMedicalRecordsError(reason instanceof Error ? reason.message : "Unable to load medical records"); }
       finally { setRecordsLoading(false); }
-      try { setAadhaarStatus(await api.myAadhaarStatus()); } catch {}
       try { setConsents(await api.consents(value.display_health_id)); } catch {}
       try { setCurrentLocation(await api.currentRecordLocation(value.display_health_id)); } catch {}
       try { setTransfers(await api.myTransfers()); } catch {}
@@ -77,16 +77,26 @@ export default function PatientPortal() {
     }
   }
 
-  async function saveAadhaar() {
-    setAadhaarMessage("");
-    try {
-      const status = await api.updateMyAadhaar(aadhaarNumber);
-      setAadhaarStatus(status);
-      setAadhaarNumber("");
-      setAadhaarMessage("Aadhaar saved securely. HealthNet has not verified it with UIDAI.");
-    } catch (reason: unknown) {
-      setAadhaarMessage(reason instanceof Error ? reason.message : "Unable to save Aadhaar");
+  async function saveProfile() {
+    setProfileMessage("");
+    if (!profileForm.given_name.trim() || !profileForm.family_name.trim() || !profileForm.date_of_birth) {
+      setProfileMessage("Given name, family name and date of birth are required.");
+      return;
     }
+    setProfileSaving(true);
+    try {
+      const updated = await api.updateMyProfile({
+        given_name: profileForm.given_name.trim(), family_name: profileForm.family_name.trim(),
+        date_of_birth: profileForm.date_of_birth, sex: profileForm.sex.trim() || undefined,
+        phone: profileForm.phone.trim() || undefined, email: profileForm.email.trim() || undefined,
+        address: profileForm.address.trim() || undefined,
+      });
+      setPatient(updated);
+      setProfileForm({ given_name: updated.given_name, family_name: updated.family_name, date_of_birth: updated.date_of_birth, sex: updated.sex ?? "", phone: updated.phone ?? "", email: updated.email ?? "", address: updated.address ?? "" });
+      setProfileMessage("Your profile has been updated.");
+    } catch (reason: unknown) {
+      setProfileMessage(reason instanceof Error ? reason.message : "Unable to update profile.");
+    } finally { setProfileSaving(false); }
   }
 
   async function revokeConsent(consentId: string) {
@@ -153,18 +163,24 @@ export default function PatientPortal() {
       )}
 
       {patient && activeTab === "profile" && (
-        <Card title="Additional identity identifier">
-          <div className="space-y-3">
-            <p className="text-sm text-slate-700">Aadhaar is optional. It is encrypted in the identity database, and only you can manage it here. It is not sent to doctors or included in clinical FHIR records.</p>
-            <p className="text-sm font-semibold text-slate-800">Current status: {aadhaarStatus?.has_aadhaar ? `Saved (${aadhaarStatus.masked_value})` : "Not added"}</p>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <input type="password" inputMode="numeric" autoComplete="off" maxLength={12} value={aadhaarNumber} onChange={(e) => setAadhaarNumber(e.target.value.replace(/\D/g, "").slice(0, 12))} placeholder="Enter 12-digit Aadhaar number" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              <button onClick={() => void saveAadhaar()} disabled={aadhaarNumber.length !== 12} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">Save Aadhaar</button>
+        <div className="space-y-5">
+          <Card title="Personal profile">
+            <p className="mb-4 text-sm text-slate-600">These are the details saved during Health ID registration. You can update them whenever needed. Information not provided earlier is left blank.</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-700">Given name<input value={profileForm.given_name} onChange={(e) => setProfileForm((v) => ({ ...v, given_name: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+              <label className="block text-sm font-medium text-slate-700">Family name<input value={profileForm.family_name} onChange={(e) => setProfileForm((v) => ({ ...v, family_name: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+              <label className="block text-sm font-medium text-slate-700">Date of birth<input type="date" value={profileForm.date_of_birth} onChange={(e) => setProfileForm((v) => ({ ...v, date_of_birth: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+              <label className="block text-sm font-medium text-slate-700">Sex<input value={profileForm.sex} onChange={(e) => setProfileForm((v) => ({ ...v, sex: e.target.value }))} placeholder="Not provided" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+              <label className="block text-sm font-medium text-slate-700">Phone<input value={profileForm.phone} onChange={(e) => setProfileForm((v) => ({ ...v, phone: e.target.value }))} placeholder="Not provided" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+              <label className="block text-sm font-medium text-slate-700">Email<input type="email" value={profileForm.email} onChange={(e) => setProfileForm((v) => ({ ...v, email: e.target.value }))} placeholder="Not provided" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+              <label className="block text-sm font-medium text-slate-700 md:col-span-2">Address<textarea value={profileForm.address} onChange={(e) => setProfileForm((v) => ({ ...v, address: e.target.value }))} placeholder="Not provided" rows={3} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
             </div>
-            {aadhaarMessage && <p className="text-sm text-slate-700">{aadhaarMessage}</p>}
-            <p className="text-xs text-slate-500">HealthNet checks only the 12-digit format. No UIDAI authentication or verification is performed.</p>
-          </div>
-        </Card>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button type="button" onClick={() => void saveProfile()} disabled={profileSaving} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{profileSaving ? "Saving…" : "Save profile changes"}</button>
+              {profileMessage && <p role="status" className="text-sm text-slate-700">{profileMessage}</p>}
+            </div>
+          </Card>
+        </div>
       )}
 
       {patient && activeTab === "records" && (
