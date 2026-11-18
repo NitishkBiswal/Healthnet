@@ -69,7 +69,7 @@ The Docker demo provisions three HAPI FHIR services: Odisha on `http://localhost
 ## Demo walkthrough
 
 1. Start Docker with `docker compose -f infrastructure/docker-compose.yml up -d`. The Compose `karnataka-db-init` service creates the Karnataka FHIR database even when you already have an existing PostgreSQL volume; `init-databases.sql` creates all FHIR databases on a fresh volume.
-2. Wait until both HAPI services are healthy, then run Alembic migrations.
+2. Wait until all three HAPI services are healthy, then run Alembic migrations.
 3. Start the backend and frontend.
 4. Run `scripts/seed-single-repository-demo.py`.
 5. Login as `testpatient`, show Health ID `INOD000100` and the current Odisha repository. Open **Transfer repository**, choose Karnataka, enter a clear reason (for example, permanent relocation), submit the request and authorize it.
@@ -87,7 +87,7 @@ One Health ID, one current authoritative repository, controlled migration when c
 
 ## Repository database architecture
 
-For a convincing multi-repository demonstration, run one FHIR server per repository, each backed by its own PostgreSQL database (for example, Odisha HAPI -> `hapi_odisha_db`, Kolkata HAPI -> `hapi_kolkata_db`). The central HealthNet database stores identities, consent, custody history and the active Record Locator; it should not store the clinical payloads. Configure each repository's `base_url` to its own HAPI endpoint. During transfer, HealthNet exports FHIR resources from the source, imports them idempotently into the destination, reads them back and verifies the content hash before switching the active locator. Keep the source read-only for a defined retention period and preserve provenance/audit history.
+For the demo, run one FHIR server per repository, each backed by its own PostgreSQL database: Odisha HAPI -> `hapi_fhir_db`, Kolkata HAPI -> `hapi_fhir_kolkata_db`, and Karnataka HAPI -> `hapi_fhir_karnataka_db`. The central HealthNet database stores identities, consent, custody history and the active Record Locator; it should not store the clinical payloads. Configure each repository's `base_url` to its own HAPI endpoint. During transfer, HealthNet exports FHIR resources from the source, imports them idempotently into the destination, reads them back and verifies the content hash before switching the active locator. Keep the source read-only for a defined retention period and preserve provenance/audit history.
 
 Do not copy PostgreSQL data directories or raw HAPI database tables between repositories: that couples repositories to HAPI/PostgreSQL internals and risks inconsistent indexes, references and server metadata. Use FHIR resource export/import for the clinical data plane. For a small classroom demo, separate databases on one PostgreSQL container are acceptable; for stronger isolation, use separate PostgreSQL instances as well. The current demo seed registers three distinct HAPI endpoints (Odisha, Kolkata and Karnataka), each backed by its own PostgreSQL database. The transfer path performs a FHIR resource export/import and read-back hash verification across those separate databases. The previous source repository is retained as an inactive historical copy; normal HealthNet reads resolve only the current active Record Locator.
 
