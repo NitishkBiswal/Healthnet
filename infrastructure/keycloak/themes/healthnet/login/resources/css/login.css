@@ -7,9 +7,9 @@
   --hn-text: #172b4d;
   --hn-muted: #526581;
   --hn-border: #d5dfeb;
-  --hn-primary: #245b91;
-  --hn-primary-hover: #194a78;
-  --hn-focus: rgba(36, 91, 145, .16);
+  --hn-primary: #1d4ed8;
+  --hn-primary-hover: #1e40af;
+  --hn-focus: rgba(29, 78, 216, .16);
 }
 
 html, body, body.login-pf, .login-pf body {
@@ -26,12 +26,56 @@ body.login-pf {
 .login-pf-page {
   box-sizing: border-box;
   display: flex !important;
+  width: 100% !important;
   min-height: 100vh;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: center !important;
+  justify-content: center !important;
   padding: 48px 20px !important;
   background: var(--hn-bg) !important;
+}
+
+/* Keycloak's PatternFly/Bootstrap wrappers can retain a left grid column.
+   Reset those layout constraints so the whole login stack is centered in the viewport. */
+.login-pf-page > .container,
+.login-pf-page .container,
+.login-pf-page .login-pf-header,
+.login-pf-page #kc-header,
+.login-pf-page #kc-content,
+.login-pf-page #kc-content-wrapper,
+.login-pf-page #kc-form,
+.login-pf-page #kc-form-wrapper {
+  float: none !important;
+  position: relative;
+  left: auto !important;
+  right: auto !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.login-pf-page > .container,
+.login-pf-page .container {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.login-pf-page #kc-content,
+.login-pf-page #kc-content-wrapper {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+}
+
+.login-pf-page #kc-form,
+.login-pf-page #kc-form-wrapper,
+.login-pf-page .card-pf {
+  float: none !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
 }
 
 #kc-header {
@@ -40,7 +84,7 @@ body.login-pf {
   max-width: 480px;
   margin: 0 auto 18px !important;
   padding: 0 2px !important;
-  text-align: left !important;
+  text-align: center !important;
 }
 
 #kc-header-wrapper {
@@ -50,7 +94,7 @@ body.login-pf {
   font-weight: 750 !important;
   letter-spacing: -.04em !important;
   line-height: 1.3 !important;
-  text-align: left !important;
+  text-align: center !important;
   text-shadow: none !important;
 }
 
@@ -60,6 +104,7 @@ body.login-pf {
   max-width: 480px !important;
   margin: 0 auto !important;
   padding: 0 !important;
+  text-align: center !important;
 }
 
 #kc-content-wrapper {
@@ -234,7 +279,7 @@ body.login-pf {
 
 @media (max-width: 560px) {
   .login-pf-page {
-    justify-content: flex-start;
+    justify-content: flex-start !important;
     padding: 28px 16px !important;
   }
   #kc-header, #kc-content, #kc-content-wrapper, #kc-form, #kc-form-wrapper,
