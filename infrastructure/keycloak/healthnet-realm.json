@@ -138,5 +138,6 @@
   ],
   "defaultRoles": [
     "patient"
-  ]
+  ],
+  "loginTheme": "healthnet"
 }
