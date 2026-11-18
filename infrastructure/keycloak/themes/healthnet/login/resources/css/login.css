@@ -1,94 +1,250 @@
-/* HealthNet identity screens — aligned with the light workspace UI. */
+/* HealthNet Keycloak login — clean, centered light workspace experience.
+   Keep Keycloak's native templates and form controls so auth flows remain intact. */
 :root {
+  color-scheme: light;
   --hn-bg: #f1f5f9;
   --hn-surface: #ffffff;
   --hn-text: #172b4d;
   --hn-muted: #526581;
   --hn-border: #d5dfeb;
   --hn-primary: #245b91;
+  --hn-primary-hover: #194a78;
+  --hn-focus: rgba(36, 91, 145, .16);
 }
 
-html, body, body.login-pf {
+html, body, body.login-pf, .login-pf body {
+  min-height: 100%;
   background: var(--hn-bg) !important;
   color: var(--hn-text) !important;
-  font-family: Arial, Helvetica, sans-serif !important;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
 }
 
-.login-pf body, .login-pf-page {
-  background: var(--hn-bg) !important;
+body.login-pf {
+  margin: 0;
 }
 
 .login-pf-page {
-  padding-top: 4vh !important;
+  box-sizing: border-box;
+  display: flex !important;
+  min-height: 100vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px !important;
+  background: var(--hn-bg) !important;
 }
 
-.card-pf, #kc-form-wrapper, .login-pf-page .card-pf {
+#kc-header {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto 18px !important;
+  padding: 0 2px !important;
+  text-align: left !important;
+}
+
+#kc-header-wrapper {
+  padding: 0 !important;
+  color: var(--hn-text) !important;
+  font-size: 23px !important;
+  font-weight: 750 !important;
+  letter-spacing: -.04em !important;
+  line-height: 1.3 !important;
+  text-align: left !important;
+  text-shadow: none !important;
+}
+
+#kc-content, #kc-content-wrapper {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 480px !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+}
+
+#kc-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+#kc-form, #kc-form-wrapper, .login-pf-page .card-pf, .card-pf {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 480px !important;
+  margin: 0 auto !important;
+}
+
+.login-pf-page .card-pf, .card-pf {
+  padding: 36px 40px 32px !important;
+  overflow: visible !important;
   background: var(--hn-surface) !important;
   border: 1px solid var(--hn-border) !important;
   border-top: 3px solid var(--hn-primary) !important;
   border-radius: 16px !important;
-  box-shadow: 0 12px 32px rgba(23, 43, 77, .08) !important;
-}
-
-#kc-header, #kc-header-wrapper {
-  color: var(--hn-text) !important;
-  text-shadow: none !important;
-  font-weight: 700 !important;
-  letter-spacing: .08em !important;
+  box-shadow: 0 14px 36px rgba(23, 43, 77, .09) !important;
 }
 
 #kc-page-title, .login-pf-page .login-pf-header h1 {
+  margin: 0 0 26px !important;
   color: var(--hn-text) !important;
-  font-weight: 650 !important;
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+  letter-spacing: -.025em !important;
+  text-align: left !important;
 }
 
-label, .pf-c-form__label, .control-label {
+#kc-form .form-group, .login-pf-page .form-group {
+  margin: 0 0 20px !important;
+}
+
+#kc-form label, .login-pf-page label, .pf-c-form__label, .control-label {
+  display: block;
+  margin: 0 0 8px !important;
+  color: var(--hn-muted) !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  line-height: 1.4 !important;
+}
+
+#kc-form input[type="text"],
+#kc-form input[type="password"],
+#kc-form input[type="email"],
+#kc-form input[type="tel"],
+#kc-form input[type="number"],
+.login-pf-page input[type="text"],
+.login-pf-page input[type="password"],
+.login-pf-page input[type="email"],
+.login-pf-page input[type="tel"],
+.login-pf-page input[type="number"],
+.login-pf-page .form-control {
+  box-sizing: border-box !important;
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 48px !important;
+  padding: 0 14px !important;
+  color: var(--hn-text) !important;
+  background: #fff !important;
+  border: 1px solid #c6d2e0 !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+  font-size: 15px !important;
+  line-height: 1.4 !important;
+}
+
+#kc-form input:focus, .login-pf-page input:focus, .login-pf-page .form-control:focus {
+  border-color: var(--hn-primary) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px var(--hn-focus) !important;
+}
+
+#kc-form .input-group, .login-pf-page .input-group {
+  display: flex !important;
+  width: 100% !important;
+  align-items: stretch !important;
+}
+
+#kc-form .input-group .form-control, .login-pf-page .input-group .form-control {
+  flex: 1 1 auto !important;
+  width: 1% !important;
+}
+
+#kc-form .input-group-addon, .login-pf-page .input-group-addon,
+#kc-form .input-group-btn > button, .login-pf-page .input-group-btn > button {
+  min-width: 48px !important;
+  border: 1px solid #c6d2e0 !important;
+  border-radius: 0 9px 9px 0 !important;
+  background: #f8fafc !important;
   color: var(--hn-muted) !important;
 }
 
-input[type="text"], input[type="password"], input[type="email"],
-input[type="tel"], input[type="number"] {
-  background: #fff !important;
-  color: var(--hn-text) !important;
-  border: 1px solid #bdcad9 !important;
-  border-radius: 8px !important;
-  box-shadow: none !important;
-  min-height: 42px;
+#kc-form-options, .login-pf-page .login-pf-settings {
+  margin: 2px 0 22px !important;
+  color: var(--hn-muted) !important;
+  font-size: 13px !important;
 }
 
-input:focus {
-  border-color: var(--hn-primary) !important;
-  box-shadow: 0 0 0 3px rgba(36, 91, 145, .14) !important;
+#kc-form-options a, .login-pf-page a {
+  color: var(--hn-primary) !important;
+  font-weight: 600;
+  text-decoration: none !important;
 }
 
-#kc-login, input[type="submit"], .pf-c-button.pf-m-primary {
+#kc-form-options a:hover, .login-pf-page a:hover {
+  color: var(--hn-primary-hover) !important;
+  text-decoration: underline !important;
+}
+
+#kc-login, #kc-register, input[type="submit"],
+.pf-c-button.pf-m-primary, .login-pf-page .btn-primary {
+  box-sizing: border-box !important;
+  display: block !important;
+  width: 100% !important;
+  min-height: 48px !important;
+  padding: 12px 18px !important;
+  color: #fff !important;
   background: var(--hn-primary) !important;
   border: 1px solid var(--hn-primary) !important;
-  border-radius: 8px !important;
-  color: #fff !important;
-  font-weight: 650 !important;
-  min-height: 42px;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+  text-shadow: none !important;
+  transition: background .15s ease, box-shadow .15s ease, transform .15s ease;
 }
 
-#kc-login:hover, input[type="submit"]:hover {
-  background: #194a78 !important;
+#kc-login:hover, #kc-register:hover, input[type="submit"]:hover,
+.pf-c-button.pf-m-primary:hover, .login-pf-page .btn-primary:hover {
+  background: var(--hn-primary-hover) !important;
+  border-color: var(--hn-primary-hover) !important;
 }
 
-a, .login-pf-page a {
-  color: var(--hn-primary) !important;
+#kc-login:focus-visible, #kc-register:focus-visible, input[type="submit"]:focus-visible {
+  outline: 3px solid var(--hn-focus) !important;
+  outline-offset: 2px !important;
 }
 
-.login-pf-page .login-pf-signup {
+.login-pf-page .login-pf-signup, #kc-registration-container {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 480px;
+  margin: 16px auto 0 !important;
+  padding: 18px 24px !important;
   color: var(--hn-muted) !important;
-  background: #f8fafc !important;
-  border-top: 1px solid #e7edf4 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-top: 1px solid var(--hn-border) !important;
+  border-radius: 0 !important;
+  text-align: center !important;
+  font-size: 13px !important;
+}
+
+#kc-info, #kc-info-wrapper {
+  color: var(--hn-muted) !important;
+  font-size: 13px !important;
 }
 
 .alert, .pf-c-alert {
-  border-radius: 8px !important;
+  margin: 0 0 18px !important;
+  border-radius: 9px !important;
 }
 
-@media (max-width: 767px) {
-  .login-pf-page { padding: 16px !important; }
-  .card-pf { margin: 0 auto !important; }
+@media (max-width: 560px) {
+  .login-pf-page {
+    justify-content: flex-start;
+    padding: 28px 16px !important;
+  }
+  #kc-header, #kc-content, #kc-content-wrapper, #kc-form, #kc-form-wrapper,
+  .login-pf-page .card-pf, .card-pf {
+    max-width: 100% !important;
+  }
+  .login-pf-page .card-pf, .card-pf {
+    padding: 28px 22px 24px !important;
+  }
+  #kc-page-title, .login-pf-page .login-pf-header h1 {
+    font-size: 23px !important;
+  }
 }
