@@ -123,6 +123,16 @@ class LocationHistoryRequest(BaseModel):
     ended_at: datetime | None = None
 
 
+class PatientProfileUpdate(BaseModel):
+    given_name: str = Field(min_length=1, max_length=100)
+    family_name: str = Field(min_length=1, max_length=100)
+    date_of_birth: date
+    sex: str | None = Field(default=None, max_length=32)
+    phone: str | None = Field(default=None, max_length=32)
+    email: str | None = Field(default=None, max_length=320)
+    address: str | None = None
+
+
 class AadhaarUpdateRequest(BaseModel):
     aadhaar_number: SecretStr
 
