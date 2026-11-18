@@ -1,0 +1,94 @@
+/* HealthNet identity screens — aligned with the light workspace UI. */
+:root {
+  --hn-bg: #f1f5f9;
+  --hn-surface: #ffffff;
+  --hn-text: #172b4d;
+  --hn-muted: #526581;
+  --hn-border: #d5dfeb;
+  --hn-primary: #245b91;
+}
+
+html, body, body.login-pf {
+  background: var(--hn-bg) !important;
+  color: var(--hn-text) !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+
+.login-pf body, .login-pf-page {
+  background: var(--hn-bg) !important;
+}
+
+.login-pf-page {
+  padding-top: 4vh !important;
+}
+
+.card-pf, #kc-form-wrapper, .login-pf-page .card-pf {
+  background: var(--hn-surface) !important;
+  border: 1px solid var(--hn-border) !important;
+  border-top: 3px solid var(--hn-primary) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 12px 32px rgba(23, 43, 77, .08) !important;
+}
+
+#kc-header, #kc-header-wrapper {
+  color: var(--hn-text) !important;
+  text-shadow: none !important;
+  font-weight: 700 !important;
+  letter-spacing: .08em !important;
+}
+
+#kc-page-title, .login-pf-page .login-pf-header h1 {
+  color: var(--hn-text) !important;
+  font-weight: 650 !important;
+}
+
+label, .pf-c-form__label, .control-label {
+  color: var(--hn-muted) !important;
+}
+
+input[type="text"], input[type="password"], input[type="email"],
+input[type="tel"], input[type="number"] {
+  background: #fff !important;
+  color: var(--hn-text) !important;
+  border: 1px solid #bdcad9 !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  min-height: 42px;
+}
+
+input:focus {
+  border-color: var(--hn-primary) !important;
+  box-shadow: 0 0 0 3px rgba(36, 91, 145, .14) !important;
+}
+
+#kc-login, input[type="submit"], .pf-c-button.pf-m-primary {
+  background: var(--hn-primary) !important;
+  border: 1px solid var(--hn-primary) !important;
+  border-radius: 8px !important;
+  color: #fff !important;
+  font-weight: 650 !important;
+  min-height: 42px;
+}
+
+#kc-login:hover, input[type="submit"]:hover {
+  background: #194a78 !important;
+}
+
+a, .login-pf-page a {
+  color: var(--hn-primary) !important;
+}
+
+.login-pf-page .login-pf-signup {
+  color: var(--hn-muted) !important;
+  background: #f8fafc !important;
+  border-top: 1px solid #e7edf4 !important;
+}
+
+.alert, .pf-c-alert {
+  border-radius: 8px !important;
+}
+
+@media (max-width: 767px) {
+  .login-pf-page { padding: 16px !important; }
+  .card-pf { margin: 0 auto !important; }
+}
