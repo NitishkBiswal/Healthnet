@@ -16,6 +16,51 @@ export default function DoctorPortal() {
   const [authorized, setAuthorized] = useState<AuthorizedPatient[]>([]);
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [principal, setPrincipal] = useState<Principal | null>(null);
+  const [dismissedConsents, setDismissedConsents] = useState<string[]>([]);
+  const [dismissalsLoaded, setDismissalsLoaded] = useState(false);
+
+  // This is a provider-specific dashboard preference. Dismissing a notice
+  // never changes the consent record or its audit history.
+  useEffect(() => {
+    if (!principal?.subject) {
+      setDismissedConsents([]);
+      setDismissalsLoaded(false);
+      return;
+    }
+
+    const key = `healthnet:dismissed-consents:${principal.subject}`;
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) ?? "[]");
+      setDismissedConsents(
+        Array.isArray(saved)
+          ? saved.filter((id): id is string => typeof id === "string")
+          : [],
+      );
+    } catch {
+      setDismissedConsents([]);
+    } finally {
+      setDismissalsLoaded(true);
+    }
+  }, [principal?.subject]);
+
+  function dismissRepositoryNotice(consentId: string) {
+    if (!principal?.subject || !dismissalsLoaded) return;
+
+    const next = [...new Set([...dismissedConsents, consentId])];
+    const key = `healthnet:dismissed-consents:${principal.subject}`;
+    try {
+      localStorage.setItem(key, JSON.stringify(next));
+      setDismissedConsents(next);
+    } catch {
+      setError("Could not save this dashboard preference. Check your browser storage settings.");
+    }
+  }
+
+  const visibleAuthorized = authorized.filter(
+    (patient) =>
+      patient.status !== "REVOKED" ||
+      !dismissedConsents.includes(patient.consent_id),
+  );
 
   async function loadPrincipal() {
     try {
@@ -91,7 +136,7 @@ export default function DoctorPortal() {
         </Card>
 
         <Card title="Patients who have granted you access">
-          {authorized.length === 0 ? (
+          {visibleAuthorized.length === 0 ? (
             <div className="rounded-lg bg-slate-50 p-4">
               <p className="text-sm font-medium text-slate-700">
                 No patients have currently granted you access.
@@ -99,7 +144,7 @@ export default function DoctorPortal() {
             </div>
           ) : (
             <div className="space-y-3">
-              {authorized.map((patient) => {
+              {visibleAuthorized.map((patient) => {
                 const selected = healthId === patient.health_id;
                 const needsRenewal = patient.status === "REVOKED";
                 if (needsRenewal) {
@@ -116,9 +161,20 @@ export default function DoctorPortal() {
                           {patient.health_id}
                         </span>
                       </div>
-                      <p className="mt-2 text-sm font-bold text-amber-900">
-                        Patient repository changed
-                      </p>
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-bold text-amber-900">
+                          Patient repository changed
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => dismissRepositoryNotice(patient.consent_id)}
+                          disabled={!dismissalsLoaded}
+                          aria-label={`Remove outdated notice for ${patient.given_name} ${patient.family_name}`}
+                          className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-bold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          Remove from list
+                        </button>
+                      </div>
                       <p className="mt-1 text-sm text-amber-900">
                         This patient's records have moved to a different healthcare repository. Your previous consent was revoked for the transfer. Ask the patient to grant consent again before opening their updated medical records.
                       </p>
