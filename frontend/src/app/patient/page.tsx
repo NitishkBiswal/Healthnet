@@ -23,6 +23,7 @@ export default function PatientPortal() {
   const [profileForm, setProfileForm] = useState({ given_name: "", family_name: "", date_of_birth: "", sex: "", phone: "", email: "", address: "" });
   const [profileMessage, setProfileMessage] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const [medicalRecords, setMedicalRecords] = useState<Record<string, unknown> | null>(null);
   const [medicalRecordsError, setMedicalRecordsError] = useState("");
   const [recordsLoading, setRecordsLoading] = useState(false);
@@ -85,15 +86,21 @@ export default function PatientPortal() {
     }
     setProfileSaving(true);
     try {
-      const updated = await api.updateMyProfile({
+      const result = await api.updateMyProfile({
         given_name: profileForm.given_name.trim(), family_name: profileForm.family_name.trim(),
         date_of_birth: profileForm.date_of_birth, sex: profileForm.sex.trim() || undefined,
         phone: profileForm.phone.trim() || undefined, email: profileForm.email.trim() || undefined,
         address: profileForm.address.trim() || undefined,
       });
-      setPatient(updated);
-      setProfileForm({ given_name: updated.given_name, family_name: updated.family_name, date_of_birth: updated.date_of_birth, sex: updated.sex ?? "", phone: updated.phone ?? "", email: updated.email ?? "", address: updated.address ?? "" });
-      setProfileMessage("Your profile has been updated.");
+      if (result.outcome === "PENDING_REVIEW") {
+        setProfileMessage("A possible duplicate was detected. Your current profile is unchanged while the Auditor reviews this update.");
+        setReviews(await api.myDuplicateReviews());
+      } else if (result.patient) {
+        setPatient(result.patient);
+        setProfileForm({ given_name: result.patient.given_name, family_name: result.patient.family_name, date_of_birth: result.patient.date_of_birth, sex: result.patient.sex ?? "", phone: result.patient.phone ?? "", email: result.patient.email ?? "", address: result.patient.address ?? "" });
+        setProfileMessage("Your profile has been updated.");
+      }
+      setEditingProfile(false);
     } catch (reason: unknown) {
       setProfileMessage(reason instanceof Error ? reason.message : "Unable to update profile.");
     } finally { setProfileSaving(false); }
@@ -130,9 +137,9 @@ export default function PatientPortal() {
           <div className="space-y-2">
             {reviews.map((review) => (
               <div key={review.id} className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
-                <p className="font-semibold">Duplicate review: {review.status}</p>
+                <p className="font-semibold">{review.review_type === "PROFILE_UPDATE" ? "Profile update review" : "Duplicate identity review"}: {review.status}</p>
                 <p className="mt-1">Confidence {review.confidence.toFixed(2)} · submitted {new Date(review.created_at).toLocaleString()}</p>
-                <p className="mt-1">The Auditor Portal is reviewing this identity match.</p>
+                <p className="mt-1">{review.review_type === "PROFILE_UPDATE" ? "Your current profile remains unchanged until the Auditor decides on the proposed changes." : "The Auditor Portal is reviewing this identity match."}</p>
               </div>
             ))}
           </div>
@@ -163,9 +170,33 @@ export default function PatientPortal() {
       )}
 
       {patient && activeTab === "profile" && (
-        <div className="space-y-5">
-          <Card title="Personal profile">
-            <p className="mb-4 text-sm text-slate-600">These are the details saved during Health ID registration. You can update them whenever needed. Information not provided earlier is left blank.</p>
+        <Card title="Personal profile">
+          <p className="mb-5 text-sm text-slate-600">Your registered details. Select Edit profile to request a change.</p>
+          <div className="grid gap-x-8 gap-y-5 md:grid-cols-2">
+            <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Given name</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.given_name || "—"}</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Family name</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.family_name || "—"}</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Date of birth</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.date_of_birth || "—"}</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sex</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.sex || "—"}</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Phone</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.phone || "—"}</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Email</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.email || "—"}</p></div>
+            <div className="md:col-span-2"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Address</p><p className="mt-1 whitespace-pre-wrap text-base font-semibold text-slate-900">{patient.address || "—"}</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Health ID</p><p className="mt-1 text-base font-bold text-cyan-900">{patient.display_health_id}</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Jurisdiction</p><p className="mt-1 text-base font-semibold text-slate-900">{patient.issuing_jurisdiction}</p></div>
+          </div>
+          <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
+            <button type="button" onClick={() => { setProfileMessage(""); setEditingProfile(true); }} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white">Edit profile</button>
+            {profileMessage && <p role="status" className="text-sm text-slate-700">{profileMessage}</p>}
+          </div>
+        </Card>
+      )}
+
+      {editingProfile && patient && (
+        <div role="presentation" className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4">
+          <section role="dialog" aria-modal="true" aria-labelledby="edit-profile-title" className="my-auto w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div><h2 id="edit-profile-title" className="text-xl font-bold text-slate-950">Edit personal profile</h2><p className="mt-1 text-sm text-slate-600">Submit your proposed changes. Possible duplicate matches are sent to an Auditor for review.</p></div>
+              <button type="button" onClick={() => setEditingProfile(false)} className="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700">Close</button>
+            </div>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block text-sm font-medium text-slate-700">Given name<input value={profileForm.given_name} onChange={(e) => setProfileForm((v) => ({ ...v, given_name: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
               <label className="block text-sm font-medium text-slate-700">Family name<input value={profileForm.family_name} onChange={(e) => setProfileForm((v) => ({ ...v, family_name: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
@@ -175,11 +206,12 @@ export default function PatientPortal() {
               <label className="block text-sm font-medium text-slate-700">Email<input type="email" value={profileForm.email} onChange={(e) => setProfileForm((v) => ({ ...v, email: e.target.value }))} placeholder="Not provided" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
               <label className="block text-sm font-medium text-slate-700 md:col-span-2">Address<textarea value={profileForm.address} onChange={(e) => setProfileForm((v) => ({ ...v, address: e.target.value }))} placeholder="Not provided" rows={3} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button type="button" onClick={() => void saveProfile()} disabled={profileSaving} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{profileSaving ? "Saving…" : "Save profile changes"}</button>
-              {profileMessage && <p role="status" className="text-sm text-slate-700">{profileMessage}</p>}
+            {profileMessage && <p role="alert" className="mt-3 text-sm text-red-700">{profileMessage}</p>}
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setEditingProfile(false)} disabled={profileSaving} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
+              <button type="button" onClick={() => void saveProfile()} disabled={profileSaving} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{profileSaving ? "Submitting…" : "Submit changes"}</button>
             </div>
-          </Card>
+          </section>
         </div>
       )}
 
