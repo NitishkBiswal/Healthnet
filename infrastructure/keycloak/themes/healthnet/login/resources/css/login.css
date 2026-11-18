@@ -35,6 +35,41 @@ body.login-pf {
   background: var(--hn-bg) !important;
 }
 
+/* Bootstrap grid wrappers in Keycloak 25 can keep the card in a left column.
+   Make the container, row and column wrappers full-width centered flex layouts. */
+.login-pf-page > .container,
+.login-pf-page > .container-fluid,
+.login-pf-page .container,
+.login-pf-page .container-fluid {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.login-pf-page .row {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.login-pf-page [class*="col-"] {
+  float: none !important;
+  flex: 0 1 480px !important;
+  width: 100% !important;
+  max-width: 480px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  left: auto !important;
+  right: auto !important;
+}
+
 /* Keycloak's PatternFly/Bootstrap wrappers can retain a left grid column.
    Reset those layout constraints so the whole login stack is centered in the viewport. */
 .login-pf-page > .container,
