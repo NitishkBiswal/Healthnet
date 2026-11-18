@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from app.core.database import Base
 from app.consent import models as consent_models  # noqa: F401
+from app.consent import dismissal_models as consent_dismissal_models  # noqa: F401
 from app.audit import models as audit_models  # noqa: F401
 from app.emergency import models as emergency_models  # noqa: F401
 from app.identity import models as identity_models  # noqa: F401
