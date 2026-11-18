@@ -194,6 +194,19 @@ async def update_my_profile(
     if patient is None:
         raise HTTPException(status_code=404, detail="No Health ID is linked to this account")
 
+    pending_review = await session.scalar(
+        select(DuplicateReview.id).where(
+            DuplicateReview.requesting_subject == subject,
+            DuplicateReview.review_type == "PROFILE_UPDATE",
+            DuplicateReview.status == "PENDING",
+        ).limit(1)
+    )
+    if pending_review is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="A profile update is already waiting for Auditor review",
+        )
+
     match_request = PatientRegistrationRequest(
         given_name=request.given_name,
         family_name=request.family_name,
