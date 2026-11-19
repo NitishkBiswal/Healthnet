@@ -105,6 +105,27 @@ async def admin_transfers(
     return await MigrationService(session).admin_transfers()
 
 
+@router.post("/admin/transfers/{transfer_id}/reject", response_model=TransferStatus)
+async def reject_admin_transfer(
+    transfer_id: UUID,
+    decision: TransferReviewDecision,
+    user: dict = Depends(require_admin_or_system),
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        if decision.decision != "REJECT":
+            raise ValueError("This endpoint only accepts a REJECT decision")
+        item = await MigrationService(session).reject_transfer(
+            transfer_id, str(user.get("sub", "unknown")), decision.reviewer_note or ""
+        )
+        response = TransferStatus.model_validate(item)
+        await session.commit()
+        return response
+    except ValueError as exc:
+        await session.rollback()
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.get("/auditor/reviews", response_model=list[TransferStatus])
 async def pending_transfer_reviews(
     _: dict = Depends(require_auditor),
