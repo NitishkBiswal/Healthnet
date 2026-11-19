@@ -82,6 +82,16 @@ export default function DoctorPortal() {
       !dismissedConsents.includes(patient.consent_id),
   );
 
+  // Count distinct patients currently represented in the visible list, not
+  // every consent row returned by the API (which may include hidden notices
+  // or multiple consent records for the same Health ID).
+  const visiblePatientCount = new Set(visibleAuthorized.map((patient) => patient.health_id)).size;
+  const activePatientCount = new Set(
+    visibleAuthorized
+      .filter((patient) => patient.status !== "REVOKED")
+      .map((patient) => patient.health_id),
+  ).size;
+
   async function loadPrincipal() {
     try {
       const current = await api.currentPrincipal();
@@ -211,8 +221,8 @@ export default function DoctorPortal() {
               className={`rounded-lg px-4 py-2.5 text-sm font-bold transition ${activeTab === tab.id ? "bg-slate-950 text-white shadow" : "text-slate-700 hover:bg-slate-100"}`}
             >
               {tab.label}
-              {tab.id === "patients" && authorized.length > 0 && (
-                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${activeTab === tab.id ? "bg-white/20 text-white" : "bg-cyan-100 text-cyan-900"}`}>{authorized.length}</span>
+              {tab.id === "patients" && visiblePatientCount > 0 && (
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${activeTab === tab.id ? "bg-white/20 text-white" : "bg-cyan-100 text-cyan-900"}`}>{visiblePatientCount}</span>
               )}
               {tab.id === "jurisdiction" && jurisdictionRequests.some((item) => item.status === "PENDING") && (
                 <span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" aria-label="Pending request" />
@@ -232,7 +242,7 @@ export default function DoctorPortal() {
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <p className="text-sm font-semibold text-slate-600">Patients with access</p>
-                <p className="mt-2 text-3xl font-bold tabular-nums text-slate-950">{visibleAuthorized.filter((patient) => patient.status !== "REVOKED").length}</p>
+                <p className="mt-2 text-3xl font-bold tabular-nums text-slate-950">{activePatientCount}</p>
                 <p className="mt-1 text-xs text-slate-500">Patients with current consent or authorization.</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
