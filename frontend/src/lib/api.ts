@@ -162,6 +162,7 @@ export const api = {
     ),
   audits: (healthId: string) => request<AuditEvent[]>("/audit/patient/" + encodeURIComponent(healthId)),
   importedRecordAudits: () => request<AuditEvent[]>("/audit/imports"),
+  emergencyAccessAudits: () => request<AuditEvent[]>("/audit/emergency-access"),
   verifyLedger: () => request<{ valid: boolean; entries_checked: number }>("/trust-ledger/ledger/verify"),
   createTransfer: (body: { health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; reason: string }) =>
     request<Transfer>("/migration/transfer-requests", { method: "POST", body: JSON.stringify(body) }),
