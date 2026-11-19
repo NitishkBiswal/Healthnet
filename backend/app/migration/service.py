@@ -399,8 +399,19 @@ class MigrationService:
             try:
                 await destination_client.put_resource(resource_type, resource_id, resource)
             except Exception as exc:
+                response = getattr(exc, "response", None)
+                status_code = getattr(response, "status_code", None)
+                response_body = getattr(response, "text", "")
+
+                error_details = (
+                    f"HTTP {status_code}: {response_body[:2000]}"
+                    if status_code is not None
+                    else f"{type(exc).__name__}: {str(exc)}"
+                )
+
                 raise ValueError(
-                    f"Destination import failed for {resource_type}/{resource_id}: {type(exc).__name__}"
+                    f"Destination import failed for "
+                    f"{resource_type}/{resource_id}: {error_details}"
                 ) from exc
 
         item.state = MigrationState.DESTINATION_VALIDATION.value
