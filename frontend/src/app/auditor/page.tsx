@@ -5,13 +5,14 @@ import { useEffect, useState } from "react";
 import { api, type AuditEvent, type DuplicateReview, type Transfer } from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
-type AuditorTab = "overview" | "identity" | "transfers" | "patient-audit" | "imports" | "integrity";
+type AuditorTab = "overview" | "identity" | "transfers" | "patient-audit" | "emergency-access" | "imports" | "integrity";
 
 const tabs: { id: AuditorTab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "identity", label: "Identity Reviews" },
   { id: "transfers", label: "Transfer Reviews" },
   { id: "patient-audit", label: "Patient Audit Trail" },
+  { id: "emergency-access", label: "Emergency Access" },
   { id: "imports", label: "Import Audit" },
   { id: "integrity", label: "Trust Integrity" },
 ];
@@ -42,6 +43,7 @@ export default function AuditorPortal() {
   const [transferReviews, setTransferReviews] = useState<Transfer[]>([]);
   const [transferRejectionReasons, setTransferRejectionReasons] = useState<Record<string, string>>({});
   const [importAudits, setImportAudits] = useState<AuditEvent[]>([]);
+  const [emergencyAccessEvents, setEmergencyAccessEvents] = useState<AuditEvent[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -61,6 +63,14 @@ export default function AuditorPortal() {
     }
   }
 
+  async function loadEmergencyAccessEvents() {
+    try {
+      setEmergencyAccessEvents(await api.emergencyAccessAudits());
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Could not load emergency-access audit events");
+    }
+  }
+
   async function loadImportAudits() {
     try {
       setImportAudits(await api.importedRecordAudits());
@@ -72,7 +82,7 @@ export default function AuditorPortal() {
   async function refreshAll() {
     setError("");
     setBusy(true);
-    await Promise.all([loadReviews(), loadTransferReviews(), loadImportAudits()]);
+    await Promise.all([loadReviews(), loadTransferReviews(), loadImportAudits(), loadEmergencyAccessEvents()]);
     setBusy(false);
   }
 
@@ -280,6 +290,20 @@ export default function AuditorPortal() {
             <button type="button" onClick={() => void audit()} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white">Inspect patient</button>
           </div>
           {events !== null && <div className="mt-4 space-y-3">{events.length === 0 ? <p className="text-sm text-slate-600">No audit events were returned for this Health ID.</p> : events.map((event) => <EventCard key={event.id} event={event} />)}</div>}
+        </Card>
+      )}
+
+      {activeTab === "emergency-access" && (
+        <Card title="Emergency break-glass audit">
+          <p className="mb-4 text-sm text-slate-600">Read-only oversight of emergency declarations and one-time chronic-condition summary views. Review the doctor, patient, justification, jurisdiction, access scope and timestamps. This tab does not grant access to clinical records.</p>
+          {emergencyAccessEvents.length === 0 ? (
+            <p className="text-sm text-slate-600">No emergency break-glass events have been recorded.</p>
+          ) : (
+            <div className="space-y-3">
+              {emergencyAccessEvents.map((event) => <EventCard key={event.id} event={event} />)}
+            </div>
+          )}
+          <button type="button" onClick={() => void loadEmergencyAccessEvents()} className="mt-4 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Refresh emergency events</button>
         </Card>
       )}
 
