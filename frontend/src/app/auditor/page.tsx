@@ -40,6 +40,7 @@ export default function AuditorPortal() {
   const [integrity, setIntegrity] = useState<{ valid: boolean; entries_checked: number } | null>(null);
   const [reviews, setReviews] = useState<DuplicateReview[]>([]);
   const [transferReviews, setTransferReviews] = useState<Transfer[]>([]);
+  const [transferRejectionReasons, setTransferRejectionReasons] = useState<Record<string, string>>({});
   const [importAudits, setImportAudits] = useState<AuditEvent[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -113,14 +114,20 @@ export default function AuditorPortal() {
 
   async function decideTransfer(id: string, decision: "APPROVE" | "REJECT") {
     setError("");
+    const note = (transferRejectionReasons[id] ?? "").trim();
+    if (decision === "REJECT" && note.length < 10) {
+      setError("Enter a rejection reason of at least 10 characters.");
+      return;
+    }
     try {
       await api.reviewTransfer(
         id,
         decision,
         decision === "APPROVE"
           ? "Transfer reason and history reviewed; approved for migration."
-          : "Transfer rejected after Auditor review.",
+          : note,
       );
+      setTransferRejectionReasons((items) => ({ ...items, [id]: "" }));
       await loadTransferReviews();
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "Could not update transfer review");
@@ -250,9 +257,13 @@ export default function AuditorPortal() {
                   <p className="mt-1 text-slate-700"><strong>Completed previous transfers:</strong> {transfer.completed_transfer_count ?? 0}</p>
                   <p className="mt-1 break-all text-xs text-slate-500">Transfer ID: {transfer.id}</p>
                   <p className="mt-1 text-xs text-slate-500">Submitted: {new Date(transfer.created_at).toLocaleString()}</p>
+                  <label className="mt-3 block">
+                    <span className="text-xs font-semibold text-slate-700">Rejection reason (visible to the patient)</span>
+                    <textarea value={transferRejectionReasons[transfer.id] ?? ""} onChange={(event) => setTransferRejectionReasons((items) => ({ ...items, [transfer.id]: event.target.value }))} rows={2} maxLength={1000} placeholder="Explain why this transfer should not proceed (minimum 10 characters)." className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm text-slate-900" />
+                  </label>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button type="button" onClick={() => void decideTransfer(transfer.id, "APPROVE")} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Approve transfer</button>
-                    <button type="button" onClick={() => void decideTransfer(transfer.id, "REJECT")} className="rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-700">Reject transfer</button>
+                    <button type="button" disabled={(transferRejectionReasons[transfer.id] ?? "").trim().length < 10} onClick={() => void decideTransfer(transfer.id, "REJECT")} className="rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-700 disabled:cursor-not-allowed disabled:opacity-40">Reject transfer</button>
                   </div>
                 </div>
               ))}
