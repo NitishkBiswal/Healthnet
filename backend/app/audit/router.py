@@ -42,18 +42,6 @@ async def log(
     return response(x)
 
 
-@router.get("/{event_id}", response_model=AuditEventResponse)
-async def get(
-    event_id: UUID,
-    _: dict = Depends(require_auditor),
-    session: AsyncSession = Depends(get_db),
-):
-    x = await AuditService(session).get_event(event_id)
-    if x is None:
-        raise HTTPException(404, "Audit event not found")
-    return response(x)
-
-
 @router.get("/patient/{health_id}", response_model=list[AuditEventResponse])
 async def patient(
     health_id: str,
@@ -105,3 +93,16 @@ async def imported_records(
         .limit(500)
     )
     return [response(event) for event in result.scalars().all()]
+
+@router.get("/{event_id}", response_model=AuditEventResponse)
+async def get(
+    event_id: UUID,
+    _: dict = Depends(require_auditor),
+    session: AsyncSession = Depends(get_db),
+):
+    x = await AuditService(session).get_event(event_id)
+    if x is None:
+        raise HTTPException(404, "Audit event not found")
+    return response(x)
+
+
