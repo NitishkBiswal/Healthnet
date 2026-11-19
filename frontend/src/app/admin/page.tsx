@@ -26,6 +26,7 @@ export default function AdminPortal() {
   const [repoSummaries, setRepoSummaries] = useState<RepositorySummary[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [adminTransfers, setAdminTransfers] = useState<Transfer[]>([]);
+  const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [migrationMessage, setMigrationMessage] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -69,6 +70,24 @@ export default function AdminPortal() {
   useEffect(() => {
     void refreshAll();
   }, []);
+
+  async function rejectQueuedTransfer(item: Transfer) {
+    const reason = (rejectionReasons[item.id] ?? "").trim();
+    if (reason.length < 10) {
+      setError("Enter a rejection reason of at least 10 characters.");
+      return;
+    }
+    setError("");
+    try {
+      const updated = await api.rejectAdminTransfer(item.id, reason);
+      setAdminTransfers((items) => items.map((value) => value.id === updated.id ? updated : value));
+      setRejectionReasons((items) => ({ ...items, [item.id]: "" }));
+      setMigrationMessage(`Transfer request for ${item.health_id} was rejected. The patient can see the reason in transfer history.`);
+      await loadAdminTransfers();
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Could not reject transfer request");
+    }
+  }
 
   async function completeQueuedTransfer(item: Transfer) {
     setError("");
@@ -269,6 +288,7 @@ export default function AdminPortal() {
             <div className="space-y-3">
               {adminTransfers.map((item) => {
                 const canExecute = item.state === "PATIENT_AUTHORIZED" || item.state === "TRANSFER_AUTH_ISSUED";
+                const canReject = ["REQUESTED", "PENDING_AUDITOR_REVIEW", "PATIENT_AUTHORIZED", "TRANSFER_AUTH_ISSUED"].includes(item.state);
                 return (
                   <div key={item.id} className="rounded-xl border border-slate-200 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -279,12 +299,20 @@ export default function AdminPortal() {
                       <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Patient's reason</p><p className="mt-1 text-sm text-slate-900">{item.reason}</p></div>
                       <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Approval status</p><p className="mt-1 text-sm font-bold text-slate-900">{item.review_required ? `Auditor review: ${item.review_status}` : "Auditor review not required"}</p>{item.reviewed_at && <p className="mt-1 text-xs text-slate-600">Reviewed {new Date(item.reviewed_at).toLocaleString()}</p>}{item.reviewer_note && <p className="mt-1 text-xs text-slate-600">Note: {item.reviewer_note}</p>}</div>
                     </div>
+                    {canReject && <label className="mt-3 block">
+                      <span className="text-xs font-semibold text-slate-700">Rejection reason (visible to the patient)</span>
+                      <textarea value={rejectionReasons[item.id] ?? ""} onChange={(event) => setRejectionReasons((items) => ({ ...items, [item.id]: event.target.value }))} rows={2} maxLength={1000} placeholder="Explain why this repository transfer is being rejected (minimum 10 characters)." className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900" />
+                    </label>}
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                       <p className="text-xs text-slate-500">Submitted {new Date(item.created_at).toLocaleString()} · ID {item.id}</p>
-                      {canExecute && <button type="button" onClick={() => void completeQueuedTransfer(item)} className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800">Execute verified transfer</button>}
+                      <div className="flex flex-wrap gap-2">
+                        {canExecute && <button type="button" onClick={() => void completeQueuedTransfer(item)} className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800">Execute verified transfer</button>}
+                        {canReject && <button type="button" onClick={() => void rejectQueuedTransfer(item)} disabled={(rejectionReasons[item.id] ?? "").trim().length < 10} className="rounded-lg border border-red-300 bg-white px-4 py-2 text-xs font-bold text-red-700 disabled:cursor-not-allowed disabled:opacity-40">Reject transfer</button>}
+                      </div>
                     </div>
                     {item.state === "PENDING_AUDITOR_REVIEW" && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs font-semibold text-amber-900">Waiting for independent Auditor approval. Transfer execution is disabled.</p>}
                     {item.state === "REQUESTED" && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-700">Waiting for patient authorization.</p>}
+                    {item.state === "REJECTED" && item.reviewer_note && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900"><strong>Rejection reason:</strong> {item.reviewer_note}</p>}
                     {item.error_message && <p className="mt-2 text-xs text-red-700">{item.error_message}</p>}
                     {item.package_hash && <p className="mt-2 break-all text-xs text-slate-500">Verified package SHA-256: {item.package_hash}</p>}
                   </div>

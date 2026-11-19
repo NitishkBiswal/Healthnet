@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.emergency.models import BreakGlassEvent
 from app.emergency.schemas import BreakGlassRequest, EmergencyProfileResponse
 from app.emergency.service import EmergencyService
+from app.identity.service import IdentityService
 from app.provider_trust.models import Provider
 from app.security.dependencies import require_role
 from app.security.rbac import Role
@@ -127,6 +128,9 @@ async def invoke_break_glass(
     session: AsyncSession = Depends(get_db),
 ):
     await _active_provider(user, session)
+    patient = await IdentityService(session).get_patient_by_health_id(health_id)
+    if patient is None:
+        raise HTTPException(404, "Patient Health ID was not found")
     event = await EmergencyService(session).invoke_break_glass(
         health_id, str(user["sub"]), request.reason
     )
@@ -146,4 +150,5 @@ async def invoke_break_glass(
         "tier": request.tier,
         "status": "BREAK_GLASS_GRANTED",
         "valid_for_minutes": int(BREAK_GLASS_VALIDITY.total_seconds() / 60),
+        "message": "Restricted emergency-profile access authorized. This does not grant access to the longitudinal medical record.",
     }

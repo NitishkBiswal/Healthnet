@@ -87,3 +87,19 @@ def test_emergency_and_longitudinal_routes_are_registered() -> None:
     paths = app.openapi()["paths"]
     assert "get" in paths["/api/v1/emergency/patients/{health_id}/emergency-profile"]
     assert "post" in paths["/api/v1/emergency/patients/{health_id}/break-glass"]
+
+def test_break_glass_requires_a_reason_and_defaults_to_minimal_tier() -> None:
+    from pydantic import ValidationError
+    from app.emergency.schemas import BreakGlassRequest, RetrievalTier
+
+    request = BreakGlassRequest(reason="Patient is unconscious and unable to consent")
+    assert request.tier == RetrievalTier.TIER_1
+    with pytest.raises(ValidationError):
+        BreakGlassRequest(reason="no")
+
+
+def test_emergency_profile_is_the_only_break_glass_read_route() -> None:
+    paths = app.openapi()["paths"]
+    profile = paths["/api/v1/emergency/patients/{health_id}/emergency-profile"]
+    assert "get" in profile
+    assert "/api/v1/longitudinal/patients/longitudinal-view" in paths

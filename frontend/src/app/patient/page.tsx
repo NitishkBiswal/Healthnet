@@ -272,7 +272,8 @@ export default function PatientPortal() {
                     {transfer.state === "PENDING_AUDITOR_REVIEW" && <p className="mt-3 text-sm text-amber-800">Your authorization is recorded. An Auditor must review this transfer before it can proceed.</p>}
                     {transfer.state === "PATIENT_AUTHORIZED" || transfer.state === "TRANSFER_AUTH_ISSUED" ? <p className="mt-3 text-sm text-cyan-800">Patient authorization complete. Waiting for the administrator to run and verify the transfer.</p> : null}
                     {transfer.error_message && <p className="mt-2 text-sm text-red-700">{transfer.error_message}</p>}
-                    {transfer.reviewer_note && <p className="mt-2 text-sm text-slate-600">Auditor note: {transfer.reviewer_note}</p>}
+                    {transfer.state === "REJECTED" && transfer.reviewer_note && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900"><p className="font-bold">Transfer rejected</p><p className="mt-1"><strong>Reason:</strong> {transfer.reviewer_note}</p>{transfer.reviewed_at && <p className="mt-1 text-xs text-red-800">Decision recorded {new Date(transfer.reviewed_at).toLocaleString()}</p>}</div>}
+                    {transfer.state !== "REJECTED" && transfer.reviewer_note && <p className="mt-2 text-sm text-slate-600">Review note: {transfer.reviewer_note}</p>}
                   </div>
                 ))}
               </div>

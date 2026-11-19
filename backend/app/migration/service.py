@@ -146,6 +146,8 @@ class MigrationService:
             item.review_status = "APPROVED"
             item.state = MigrationState.PATIENT_AUTHORIZED.value
         else:
+            if not reviewer_note or len(reviewer_note.strip()) < 10:
+                raise ValueError("Please provide a rejection reason of at least 10 characters")
             item.review_status = "REJECTED"
             item.state = MigrationState.REJECTED.value
         await AuditService(self.session).log_event(
@@ -158,6 +160,60 @@ class MigrationService:
                     "transfer_id": str(item.id),
                     "reason": item.reason,
                     "reviewer_note": reviewer_note,
+                    "review_status": item.review_status,
+                },
+            )
+        )
+        await self.session.flush()
+        await self.session.refresh(item)
+        return item
+
+    async def reject_transfer(
+        self, transfer_id: UUID, actor_id: str, rejection_reason: str
+    ) -> TransferRequest:
+        reason = rejection_reason.strip()
+        if len(reason) < 10:
+            raise ValueError("Please provide a rejection reason of at least 10 characters")
+
+        item = await self.session.scalar(
+            select(TransferRequest)
+            .where(TransferRequest.id == transfer_id)
+            .with_for_update()
+        )
+        if item is None:
+            raise ValueError("Transfer request not found")
+        rejectable_states = {
+            MigrationState.REQUESTED.value,
+            MigrationState.PENDING_AUDITOR_REVIEW.value,
+            MigrationState.PATIENT_AUTHORIZED.value,
+            MigrationState.TRANSFER_AUTH_ISSUED.value,
+        }
+        if item.state not in rejectable_states:
+            raise ValueError("Only transfers that have not started execution can be rejected")
+
+        item.reviewed_by = actor_id
+        item.reviewed_at = datetime.now(UTC)
+        item.reviewer_note = reason
+        item.review_status = "REJECTED"
+        item.state = MigrationState.REJECTED.value
+        await self.session.execute(
+            update(TransferAuthorizationToken)
+            .where(
+                TransferAuthorizationToken.transfer_request_id == item.id,
+                TransferAuthorizationToken.active.is_(True),
+            )
+            .values(active=False)
+        )
+        await AuditService(self.session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.MIGRATION,
+                health_id=item.health_id,
+                actor_id=actor_id,
+                action="REPOSITORY_MIGRATION_ADMIN_REJECTED",
+                payload={
+                    "transfer_id": str(item.id),
+                    "reason": item.reason,
+                    "rejection_reason": reason,
                     "review_status": item.review_status,
                 },
             )
@@ -375,7 +431,16 @@ class MigrationService:
                     f"Could not export {resource_type} from source repository {source.code}: {type(exc).__name__}"
                 ) from exc
 
-        exported = list(exported_by_key.values())
+        # Import Patient first so HAPI can resolve references from clinical resources.
+        # Do this explicitly rather than relying on the configured resource_types order.
+        exported = sorted(
+            exported_by_key.values(),
+            key=lambda resource: (
+                0 if resource.get("resourceType") == "Patient" else 1,
+                resource.get("resourceType", ""),
+                resource.get("id", ""),
+            ),
+        )
         if not exported:
             raise ValueError("Source repository returned no FHIR resources for this patient")
         if request.resource_count and request.resource_count != len(exported):
@@ -399,8 +464,19 @@ class MigrationService:
             try:
                 await destination_client.put_resource(resource_type, resource_id, resource)
             except Exception as exc:
+                response = getattr(exc, "response", None)
+                status_code = getattr(response, "status_code", None)
+                response_body = getattr(response, "text", "")
+
+                error_details = (
+                    f"HTTP {status_code}: {response_body[:2000]}"
+                    if status_code is not None
+                    else f"{type(exc).__name__}: {str(exc)}"
+                )
+
                 raise ValueError(
-                    f"Destination import failed for {resource_type}/{resource_id}: {type(exc).__name__}"
+                    f"Destination import failed for "
+                    f"{resource_type}/{resource_id}: {error_details}"
                 ) from exc
 
         item.state = MigrationState.DESTINATION_VALIDATION.value
