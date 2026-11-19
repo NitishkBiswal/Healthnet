@@ -72,33 +72,10 @@ async def get_emergency_profile(
             health_id, provider.external_id, purpose, "emergency"
         )
 
-    break_glass = None
     if not consent_allowed:
-        cutoff = datetime.now(UTC) - BREAK_GLASS_VALIDITY
-        break_glass = await session.scalar(
-            select(BreakGlassEvent)
-            .where(
-                BreakGlassEvent.health_id == health_id,
-                BreakGlassEvent.actor_id == str(user["sub"]),
-                BreakGlassEvent.invoked_at >= cutoff,
-            )
-            .order_by(BreakGlassEvent.invoked_at.desc())
-            .limit(1)
-            .with_for_update()
-        )
-        if break_glass is not None:
-            already_used = await session.scalar(
-                select(AuditEvent.id).where(
-                    AuditEvent.action == "EMERGENCY_PROFILE_VIEWED",
-                    AuditEvent.payload.contains(str(break_glass.id)),
-                ).limit(1)
-            )
-            if already_used is not None:
-                break_glass = None
-    if not consent_allowed and break_glass is None:
         raise HTTPException(
             403,
-            "Active patient consent for this purpose/scope or a valid 15-minute break-glass authorization is required",
+            "Active patient consent is required for the standard emergency profile. Use the separately audited break-glass summary for a genuine emergency.",
         )
 
     profile = await EmergencyService(session).get_emergency_profile(health_id)
@@ -113,8 +90,7 @@ async def get_emergency_profile(
             action="EMERGENCY_PROFILE_VIEWED",
             payload={
                 "provider_id": provider.external_id,
-                "access_method": "BREAK_GLASS" if break_glass else "PATIENT_CONSENT",
-                "break_glass_event_id": str(break_glass.id) if break_glass else None,
+                "access_method": "PATIENT_CONSENT",
                 "purpose": purpose,
                 "scope": scope,
             },
@@ -200,6 +176,8 @@ async def invoke_break_glass(
     session: AsyncSession = Depends(get_db),
 ):
     provider = await _active_provider(user, session)
+    if request.emergency_declaration is not True:
+        raise HTTPException(400, "You must confirm that this is a genuine emergency")
     patient = await IdentityService(session).get_patient_by_health_id(health_id)
     if patient is None:
         raise HTTPException(404, "Patient Health ID was not found")
