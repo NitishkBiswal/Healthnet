@@ -159,6 +159,8 @@ export const api = {
   auditorTransferReviews: () => request<Transfer[]>("/migration/auditor/reviews"),
   reviewTransfer: (id: string, decision: "APPROVE" | "REJECT", reviewer_note?: string) =>
     request<Transfer>("/migration/auditor/reviews/" + encodeURIComponent(id), { method: "POST", body: JSON.stringify({ decision, reviewer_note }) }),
+  rejectAdminTransfer: (id: string, reviewer_note: string) =>
+    request<Transfer>("/migration/admin/transfers/" + encodeURIComponent(id) + "/reject", { method: "POST", body: JSON.stringify({ decision: "REJECT", reviewer_note }) }),
   myTransfers: () => request<Transfer[]>("/migration/my-transfers"),
   authorizeTransfer: (id: string, authorization_reference: string) =>
     request<Transfer>("/migration/transfer-authorizations/" + encodeURIComponent(id), { method: "POST", body: JSON.stringify({ authorization_reference }) }),
