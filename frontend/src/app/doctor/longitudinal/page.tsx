@@ -158,8 +158,32 @@ function DoctorLongitudinalViewContent() {
   const [view, setView] = useState<LongitudinalResponse | null>(null);
   const [emergency, setEmergency] = useState<EmergencyProfile | null>(null);
   const [emergencyError, setEmergencyError] = useState("");
+  const [breakGlassReason, setBreakGlassReason] = useState("");
+  const [breakGlassLoading, setBreakGlassLoading] = useState(false);
+  const [emergencyAccessMethod, setEmergencyAccessMethod] = useState<"PATIENT_CONSENT" | "BREAK_GLASS" | null>(null);
   const [authorized, setAuthorized] = useState<AuthorizedPatient[]>([]);
   const [error, setError] = useState("");
+
+  async function requestEmergencyAccess() {
+    if (breakGlassReason.trim().length < 5) {
+      setEmergencyError("Please provide an emergency reason of at least 5 characters.");
+      return;
+    }
+    setBreakGlassLoading(true);
+    setEmergencyError("");
+    try {
+      await api.invokeBreakGlass(healthId, breakGlassReason.trim(), "TIER_1");
+      const profile = await api.emergency(healthId, requestedPurpose, "emergency");
+      setEmergency(profile);
+      setEmergencyAccessMethod("BREAK_GLASS");
+      setEmergencyError("");
+    } catch (reason: unknown) {
+      setEmergency(null);
+      setEmergencyError(reason instanceof Error ? reason.message : "Emergency access could not be authorized.");
+    } finally {
+      setBreakGlassLoading(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -189,7 +213,15 @@ function DoctorLongitudinalViewContent() {
           item.scopes.includes(requestedScope)
         );
         if (!consent) {
-          throw new Error("This patient has not granted your account active consent for the selected purpose and scope. Return to the Doctor Dashboard and select the patient again.");
+          const [patientData, locationData] = await Promise.all([
+            api.patient(healthId),
+            api.currentRecordLocation(healthId),
+          ]);
+          if (cancelled) return;
+          setPatient(patientData);
+          setLocation(locationData);
+          setEmergencyError("No active patient consent exists for this doctor and scope. In a genuine emergency, request restricted break-glass access below.");
+          return;
         }
 
         const [patientData, locationData, longitudinalData] = await Promise.all([
@@ -206,6 +238,7 @@ function DoctorLongitudinalViewContent() {
           const emergencyData = await api.emergency(healthId, consent.purpose, requestedScope);
           if (cancelled) return;
           setEmergency(emergencyData);
+          setEmergencyAccessMethod("PATIENT_CONSENT");
           setEmergencyError("");
         } catch (emergencyReason: unknown) {
           if (cancelled) return;
@@ -322,9 +355,23 @@ function DoctorLongitudinalViewContent() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-slate-600">{emergencyError || "Emergency details are not available."}</p>
+              <div className="space-y-3">
+                <p className="text-sm text-slate-700">{emergencyError || "Emergency details are not available."}</p>
+                {!authorized.some((item) => item.health_id === healthId && item.purpose === requestedPurpose && item.scopes.includes(requestedScope)) && (
+                  <div className="rounded-lg border border-rose-300 bg-rose-50 p-4">
+                    <p className="font-semibold text-rose-950">Emergency access only</p>
+                    <p className="mt-1 text-xs text-rose-900">Use this only when a genuine medical emergency prevents the patient from providing consent. This grants access to the emergency profile only, not the full medical record.</p>
+                    <label className="mt-3 block text-sm font-semibold text-slate-900" htmlFor="break-glass-reason">Emergency reason</label>
+                    <textarea id="break-glass-reason" value={breakGlassReason} onChange={(event) => setBreakGlassReason(event.target.value)} minLength={5} maxLength={1000} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm" placeholder="Describe the immediate clinical emergency and why consent cannot be obtained." />
+                    <button type="button" onClick={() => void requestEmergencyAccess()} disabled={breakGlassLoading || breakGlassReason.trim().length < 5} className="mt-3 rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                      {breakGlassLoading ? "Authorizing..." : "Request emergency access"}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
-            <p className="mt-3 text-xs text-slate-500">Emergency details are shown only when the provider has active patient consent for the requested scope or a valid break-glass authorization.</p>
+            {emergency && <p className="mt-3 text-xs font-semibold text-slate-600">Access method: {emergencyAccessMethod === "BREAK_GLASS" ? "Emergency break-glass authorization" : "Patient consent"}. Break-glass authorization does not permit access to the longitudinal record.</p>}
+            <p className="mt-3 text-xs text-slate-500">Emergency details are available only with active patient consent or a valid, single-use 15-minute break-glass authorization.</p>
           </Card>
 
           <Card title="Chronic conditions">
