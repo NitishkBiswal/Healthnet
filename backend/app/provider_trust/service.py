@@ -174,6 +174,9 @@ class ProviderTrustService:
         if provider.trust_status != TrustStatus.ACTIVE.value:
             raise ValueError("Only active providers can request a jurisdiction transfer")
         requested = request.requested_jurisdiction.strip().upper()
+        reason = request.reason.strip()
+        if len(reason) < 10:
+            raise ValueError("Please provide a transfer reason of at least 10 characters")
         if not requested:
             raise ValueError("Requested jurisdiction is required")
         if requested == provider.jurisdiction.upper():
@@ -198,7 +201,7 @@ class ProviderTrustService:
             provider_id=provider.id,
             current_jurisdiction=provider.jurisdiction,
             requested_jurisdiction=requested,
-            reason=request.reason.strip(),
+            reason=reason,
             status="PENDING",
         )
         self.session.add(item)
