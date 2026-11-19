@@ -49,3 +49,29 @@ class PractitionerRoleCreate(BaseModel):
 class PractitionerRoleResponse(PractitionerRoleCreate):
     model_config=ConfigDict(from_attributes=True)
     id:UUID; active:bool
+
+
+class ProviderJurisdictionRequestCreate(BaseModel):
+    requested_jurisdiction: str = Field(min_length=2, max_length=32)
+    reason: str = Field(min_length=10, max_length=1000)
+
+
+class ProviderJurisdictionReview(BaseModel):
+    decision: str = Field(pattern="^(APPROVE|REJECT)$")
+    reviewer_note: str | None = Field(default=None, max_length=1000)
+
+
+class ProviderJurisdictionRequestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    provider_id: UUID
+    current_jurisdiction: str
+    requested_jurisdiction: str
+    reason: str
+    status: str
+    reviewer_subject: str | None
+    reviewer_note: str | None
+    created_at: object
+    reviewed_at: object | None
+    provider_external_id: str | None = None
+    provider_name: str | None = None
