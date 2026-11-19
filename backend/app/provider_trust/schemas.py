@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
@@ -71,7 +72,7 @@ class ProviderJurisdictionRequestResponse(BaseModel):
     status: str
     reviewer_subject: str | None
     reviewer_note: str | None
-    created_at: object
-    reviewed_at: object | None
+    created_at: datetime
+    reviewed_at: datetime | None
     provider_external_id: str | None = None
     provider_name: str | None = None
