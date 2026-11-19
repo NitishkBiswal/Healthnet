@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { api, type AuthorizedPatient, type Principal, type ProviderJurisdictionRequest } from "@/lib/api";
+import { api, type AuthorizedPatient, type BreakGlassSummary, type Principal, type ProviderJurisdictionRequest } from "@/lib/api";
 
-type DoctorTab = "overview" | "patients" | "jurisdiction";
+type DoctorTab = "overview" | "patients" | "jurisdiction" | "emergency";
 
 const tabs: { id: DoctorTab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "patients", label: "Patients & Records" },
   { id: "jurisdiction", label: "Jurisdiction" },
+  { id: "emergency", label: "Emergency Access" },
 ];
 import { Card, PortalShell } from "@/components/portal-shell";
 
@@ -30,6 +31,13 @@ export default function DoctorPortal() {
   const [jurisdictionMessage, setJurisdictionMessage] = useState("");
   const [dismissedConsents, setDismissedConsents] = useState<string[]>([]);
   const [dismissalsLoaded, setDismissalsLoaded] = useState(false);
+  const [emergencyHealthId, setEmergencyHealthId] = useState("");
+  const [emergencyReason, setEmergencyReason] = useState("");
+  const [emergencyConfirmed, setEmergencyConfirmed] = useState(false);
+  const [emergencyBusy, setEmergencyBusy] = useState(false);
+  const [emergencyError, setEmergencyError] = useState("");
+  const [emergencyMessage, setEmergencyMessage] = useState("");
+  const [emergencySummary, setEmergencySummary] = useState<BreakGlassSummary | null>(null);
 
   // This is a provider-specific dashboard preference. Dismissing a notice
   // never changes the consent record or its audit history.
@@ -132,6 +140,48 @@ export default function DoctorPortal() {
       setDismissing(null);
     }
   }
+
+  async function requestEmergencyAccess() {
+    setEmergencyError("");
+    setEmergencyMessage("");
+    setEmergencySummary(null);
+    if (!emergencyHealthId.trim()) {
+      setEmergencyError("Enter the patient's Health ID.");
+      return;
+    }
+    if (emergencyReason.trim().length < 10) {
+      setEmergencyError("Provide an emergency justification of at least 10 characters.");
+      return;
+    }
+    if (!emergencyConfirmed) {
+      setEmergencyError("Confirm that this is a genuine emergency and normal consent cannot reasonably be obtained.");
+      return;
+    }
+    setEmergencyBusy(true);
+    try {
+      await api.invokeBreakGlass(emergencyHealthId.trim().toUpperCase(), emergencyReason.trim());
+      const summary = await api.breakGlassSummary(emergencyHealthId.trim().toUpperCase());
+      setEmergencySummary(summary);
+      setEmergencyMessage("Emergency access granted. Only the patient's recorded emergency-relevant chronic conditions are shown.");
+      setEmergencyReason("");
+      setEmergencyConfirmed(false);
+    } catch (reason: unknown) {
+      setEmergencyError(reason instanceof Error ? reason.message : "Emergency access could not be completed.");
+    } finally {
+      setEmergencyBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!emergencySummary) return;
+    const remaining = new Date(emergencySummary.access_expires_at).getTime() - Date.now();
+    if (remaining <= 0) {
+      setEmergencySummary(null);
+      return;
+    }
+    const timer = window.setTimeout(() => setEmergencySummary(null), remaining);
+    return () => window.clearTimeout(timer);
+  }, [emergencySummary]);
 
   function openLongitudinalView() {
     setError("");
@@ -342,6 +392,45 @@ export default function DoctorPortal() {
           {error && <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>}
         </Card>
 
+          </div>
+        )}
+
+        {activeTab === "emergency" && (
+          <div className="space-y-5">
+            <Card title="Emergency break-glass access">
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                <p className="font-bold">For genuine medical emergencies only</p>
+                <p className="mt-1">Use this only when urgent care is required and the patient cannot reasonably provide consent. This grants one-time, read-only access to recorded emergency-relevant chronic conditions only. It does not open the full medical record.</p>
+              </div>
+              <div className="mt-4 space-y-3">
+                <label className="block text-sm font-semibold text-slate-800" htmlFor="emergency-health-id">Patient Health ID</label>
+                <input id="emergency-health-id" value={emergencyHealthId} onChange={(event) => { setEmergencyHealthId(event.target.value.toUpperCase()); setEmergencySummary(null); setEmergencyError(""); }} placeholder="Enter patient Health ID" maxLength={32} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900" />
+                <label className="block text-sm font-semibold text-slate-800" htmlFor="emergency-reason">Emergency justification</label>
+                <textarea id="emergency-reason" value={emergencyReason} onChange={(event) => setEmergencyReason(event.target.value)} rows={3} maxLength={1000} placeholder="Explain the emergency and why consent cannot reasonably be obtained (minimum 10 characters)." className="w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900" />
+                <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                  <input type="checkbox" checked={emergencyConfirmed} onChange={(event) => setEmergencyConfirmed(event.target.checked)} className="mt-1" />
+                  <span>I confirm this is a genuine emergency and normal patient consent cannot reasonably be obtained.</span>
+                </label>
+                <button type="button" onClick={() => void requestEmergencyAccess()} disabled={emergencyBusy || !emergencyHealthId.trim() || emergencyReason.trim().length < 10 || !emergencyConfirmed} className="rounded-lg bg-amber-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-40">
+                  {emergencyBusy ? "Verifying emergency access..." : "Request emergency summary"}
+                </button>
+                {emergencyError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{emergencyError}</p>}
+                {emergencyMessage && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{emergencyMessage}</p>}
+              </div>
+            </Card>
+            {emergencySummary && (
+              <Card title="Restricted emergency chronic-condition summary">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-mono text-sm font-bold text-slate-900">{emergencySummary.health_id}</p>
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">One-time access · expires {new Date(emergencySummary.access_expires_at).toLocaleTimeString()}</span>
+                </div>
+                <p className="mt-3 text-sm text-slate-600">Only emergency-relevant chronic conditions explicitly recorded in HealthNet are displayed.</p>
+                <ul className="mt-3 space-y-2">
+                  {emergencySummary.chronic_conditions.map((condition, index) => <li key={index} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-slate-900">{condition}</li>)}
+                </ul>
+                <p className="mt-3 text-xs text-slate-500">This access is logged for retrospective Auditor review. Refreshing or closing this page clears the displayed summary; the authorization cannot be reused.</p>
+              </Card>
+            )}
           </div>
         )}
 
