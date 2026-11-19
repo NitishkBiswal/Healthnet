@@ -165,17 +165,11 @@ export default function DoctorPortal() {
                 <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${activeTab === tab.id ? "bg-white/20 text-white" : "bg-cyan-100 text-cyan-900"}`}>{authorized.length}</span>
               )}
               {tab.id === "jurisdiction" && jurisdictionRequests.some((item) => item.status === "PENDING") && (
-                <span className={`ml-2 inline-block h-2 w-2 rounded-full ${activeTab === tab.id ? "bg-amber-300" : "bg-amber-500"}`} aria-label="Pending request" />
+                <span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" aria-label="Pending request" />
               )}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => { void loadPrincipal(); void loadAuthorized(); }}
-            className="ml-auto rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Refresh data
-          </button>
+          <button type="button" onClick={() => { void loadPrincipal(); void loadAuthorized(); }} className="ml-auto rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Refresh data</button>
         </div>
 
         {activeTab === "overview" && (
@@ -200,14 +194,8 @@ export default function DoctorPortal() {
             <Card title="Workspace shortcuts">
               <p className="mb-4 text-sm text-slate-600">Choose a workspace area to continue.</p>
               <div className="grid gap-3 md:grid-cols-2">
-                <button type="button" onClick={() => setActiveTab("patients")} className="rounded-xl border border-slate-200 p-4 text-left transition hover:border-cyan-500 hover:bg-cyan-50">
-                  <p className="font-bold text-slate-950">Patients & Records</p>
-                  <p className="mt-1 text-sm text-slate-600">Review patient consent and open authorized longitudinal records.</p>
-                </button>
-                <button type="button" onClick={() => setActiveTab("jurisdiction")} className="rounded-xl border border-slate-200 p-4 text-left transition hover:border-cyan-500 hover:bg-cyan-50">
-                  <p className="font-bold text-slate-950">Jurisdiction</p>
-                  <p className="mt-1 text-sm text-slate-600">View your registered region and request an Admin-approved transfer.</p>
-                </button>
+                <button type="button" onClick={() => setActiveTab("patients")} className="rounded-xl border border-slate-200 p-4 text-left transition hover:border-cyan-500 hover:bg-cyan-50"><p className="font-bold text-slate-950">Patients & Records</p><p className="mt-1 text-sm text-slate-600">Review patient consent and open authorized longitudinal records.</p></button>
+                <button type="button" onClick={() => setActiveTab("jurisdiction")} className="rounded-xl border border-slate-200 p-4 text-left transition hover:border-cyan-500 hover:bg-cyan-50"><p className="font-bold text-slate-950">Jurisdiction</p><p className="mt-1 text-sm text-slate-600">View your registered region and request an Admin-approved transfer.</p></button>
               </div>
             </Card>
           </div>
@@ -230,37 +218,7 @@ export default function DoctorPortal() {
           )}
         </Card>
 
-          </div>
-        )}
-
-        {activeTab === "jurisdiction" && (
-          <div className="space-y-5">
-        <Card title="Your jurisdiction">
-          <p className="text-sm text-slate-700">Your current registered jurisdiction</p>
-          <p className="mt-2 rounded-lg bg-cyan-50 px-3 py-2 font-mono text-sm font-bold text-slate-950">{principal?.provider_jurisdiction || "Not available"}</p>
-          <p className="mt-3 text-xs text-slate-600">If you move to a hospital in another jurisdiction, submit a request here. Only an Admin can approve the change; your registered jurisdiction remains unchanged until approval.</p>
-          {jurisdictionRequests.some((item) => item.status === "PENDING") ? (
-            <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">You already have a pending jurisdiction transfer request. Wait for Admin review before submitting another.</p>
-          ) : (
-            <div className="mt-3 space-y-3">
-              <input value={requestedJurisdiction} onChange={(event) => setRequestedJurisdiction(event.target.value)} placeholder="Requested jurisdiction (e.g. IN-KA)" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900" />
-              <textarea value={jurisdictionReason} onChange={(event) => setJurisdictionReason(event.target.value)} rows={2} maxLength={1000} placeholder="Explain why you need to transfer to this jurisdiction (minimum 10 characters)." className="w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900" />
-              <button type="button" onClick={() => void submitJurisdictionRequest()} disabled={requestedJurisdiction.trim().length < 2 || jurisdictionReason.trim().length < 10} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Submit jurisdiction transfer request</button>
-              {jurisdictionMessage && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{jurisdictionMessage}</p>}
-            </div>
-          )}
-          {jurisdictionRequests.length > 0 && <div className="mt-4 space-y-2">
-            <p className="text-sm font-bold text-slate-800">Request history</p>
-            {jurisdictionRequests.map((item) => <div key={item.id} className="rounded-lg border border-slate-200 p-3 text-sm">
-              <div className="flex flex-wrap justify-between gap-2"><strong>{item.current_jurisdiction} → {item.requested_jurisdiction}</strong><span className="font-bold">{item.status}</span></div>
-              <p className="mt-1 text-slate-600">Reason: {item.reason}</p>
-              <p className="mt-1 text-xs text-slate-500">Submitted {new Date(item.created_at).toLocaleString()}</p>
-              {item.reviewer_note && <p className="mt-2 rounded-lg bg-red-50 p-2 text-sm text-red-900">Admin response: {item.reviewer_note}</p>}
-            </div>)}
-          </div>}
-        </Card>
-
-        <Card title="Patients who have granted you access">
+            <Card title="Patients who have granted you access">
           {visibleAuthorized.length === 0 ? (
             <div className="rounded-lg bg-slate-50 p-4">
               <p className="text-sm font-medium text-slate-700">
@@ -352,12 +310,7 @@ export default function DoctorPortal() {
           )}
         </Card>
 
-          </div>
-        )}
-
-        {activeTab === "patients" && (
-          <div className="space-y-5">
-        <Card title="Patient record">
+            <Card title="Patient record">
           {healthId ? (
             <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-5">
               <p className="text-xs font-bold uppercase tracking-wide text-cyan-800">Selected patient</p>
@@ -388,11 +341,41 @@ export default function DoctorPortal() {
           )}
           {error && <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>}
         </Card>
+
           </div>
         )}
-        {error && (
-          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>
+
+        {activeTab === "jurisdiction" && (
+          <div className="space-y-5">
+            <Card title="Your jurisdiction">
+          <p className="text-sm text-slate-700">Your current registered jurisdiction</p>
+          <p className="mt-2 rounded-lg bg-cyan-50 px-3 py-2 font-mono text-sm font-bold text-slate-950">{principal?.provider_jurisdiction || "Not available"}</p>
+          <p className="mt-3 text-xs text-slate-600">If you move to a hospital in another jurisdiction, submit a request here. Only an Admin can approve the change; your registered jurisdiction remains unchanged until approval.</p>
+          {jurisdictionRequests.some((item) => item.status === "PENDING") ? (
+            <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">You already have a pending jurisdiction transfer request. Wait for Admin review before submitting another.</p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              <input value={requestedJurisdiction} onChange={(event) => setRequestedJurisdiction(event.target.value)} placeholder="Requested jurisdiction (e.g. IN-KA)" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900" />
+              <textarea value={jurisdictionReason} onChange={(event) => setJurisdictionReason(event.target.value)} rows={2} maxLength={1000} placeholder="Explain why you need to transfer to this jurisdiction (minimum 10 characters)." className="w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900" />
+              <button type="button" onClick={() => void submitJurisdictionRequest()} disabled={requestedJurisdiction.trim().length < 2 || jurisdictionReason.trim().length < 10} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Submit jurisdiction transfer request</button>
+              {jurisdictionMessage && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{jurisdictionMessage}</p>}
+            </div>
+          )}
+          {jurisdictionRequests.length > 0 && <div className="mt-4 space-y-2">
+            <p className="text-sm font-bold text-slate-800">Request history</p>
+            {jurisdictionRequests.map((item) => <div key={item.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+              <div className="flex flex-wrap justify-between gap-2"><strong>{item.current_jurisdiction} → {item.requested_jurisdiction}</strong><span className="font-bold">{item.status}</span></div>
+              <p className="mt-1 text-slate-600">Reason: {item.reason}</p>
+              <p className="mt-1 text-xs text-slate-500">Submitted {new Date(item.created_at).toLocaleString()}</p>
+              {item.reviewer_note && <p className="mt-2 rounded-lg bg-red-50 p-2 text-sm text-red-900">Admin response: {item.reviewer_note}</p>}
+            </div>)}
+          </div>}
+        </Card>
+
+          </div>
         )}
+
+        {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
       </div>
     </PortalShell>
   );
