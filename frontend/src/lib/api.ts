@@ -92,6 +92,7 @@ export interface Principal {
 }
 export interface AuditEvent { id: string; event_type: string; health_id?: string; actor_id: string; action: string; payload: Record<string, unknown>; event_hash: string; created_at: string; }
 export interface Transfer { id: string; health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; reason: string; review_required: boolean; review_status: string; completed_transfer_count?: number; reviewed_by?: string; reviewed_at?: string; reviewer_note?: string; state: string; authorization_reference?: string; package_hash?: string; error_message?: string; created_at: string; updated_at: string; }
+export interface BreakGlassSummary { health_id: string; chronic_conditions: string[]; access_expires_at: string; }
 export interface CurrentRecordLocation {
   health_id: string; repository_id: string; repository_code: string; repository_name: string;
   jurisdiction: string; endpoint: string; resource_types: string[]; assigned_at?: string;
@@ -146,7 +147,8 @@ export const api = {
   createProvider: (body: { external_id: string; given_name: string; family_name: string; license_number: string; jurisdiction: string; keycloak_subject?: string }) =>
     request<Provider>("/provider-trust/providers", { method: "POST", body: JSON.stringify(body) }),
   emergency: (healthId: string, purpose = "TREATMENT", scope = "clinical") => request<{ health_id: string; blood_group?: string | null; allergies: string[]; medications: string[]; conditions: string[]; emergency_contacts: string[] }>("/emergency/patients/" + encodeURIComponent(healthId) + "/emergency-profile?purpose=" + encodeURIComponent(purpose) + "&scope=" + encodeURIComponent(scope)),
-  invokeBreakGlass: (healthId: string, reason: string, tier = "TIER_1") => request<{ event_id: string; health_id: string; tier: string; status: string; valid_for_minutes: number; message: string }>("/emergency/patients/" + encodeURIComponent(healthId) + "/break-glass", { method: "POST", body: JSON.stringify({ reason, tier }) }),
+  invokeBreakGlass: (healthId: string, reason: string, tier = "TIER_1") => request<{ event_id: string; health_id: string; tier: string; status: string; valid_for_minutes: number; message: string }>("/emergency/patients/" + encodeURIComponent(healthId) + "/break-glass", { method: "POST", body: JSON.stringify({ reason, tier, emergency_declaration: true }) }),
+  breakGlassSummary: (healthId: string) => request<BreakGlassSummary>("/emergency/patients/" + encodeURIComponent(healthId) + "/break-glass-summary"),
   myMedicalRecords: () => request<Record<string, unknown>>("/longitudinal/patients/me/medical-records"),
   longitudinal: (healthId: string, purpose = "TREATMENT", scope = "clinical") =>
     request<Record<string, unknown>>("/longitudinal/patients/longitudinal-view", { method: "POST", body: JSON.stringify({ health_id: healthId, purpose, scope }) }),
