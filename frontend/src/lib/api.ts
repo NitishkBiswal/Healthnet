@@ -81,9 +81,14 @@ export interface Provider {
   id: string; external_id: string; given_name: string; family_name: string; license_number: string;
   jurisdiction: string; trust_status: string; keycloak_subject?: string;
 }
+export interface ProviderJurisdictionRequest {
+  id: string; provider_id: string; current_jurisdiction: string; requested_jurisdiction: string;
+  reason: string; status: string; reviewer_subject?: string | null; reviewer_note?: string | null;
+  created_at: string; reviewed_at?: string | null; provider_external_id?: string | null; provider_name?: string | null;
+}
 export interface Principal {
   subject: string; email?: string; roles: string[]; provider_id?: string | null;
-  provider_name?: string | null; provider_status?: string | null;
+  provider_name?: string | null; provider_status?: string | null; provider_jurisdiction?: string | null;
 }
 export interface AuditEvent { id: string; event_type: string; health_id?: string; actor_id: string; action: string; payload: Record<string, unknown>; event_hash: string; created_at: string; }
 export interface Transfer { id: string; health_id: string; source_repository_id: string; destination_repository_id: string; purpose: string; scope: string; reason: string; review_required: boolean; review_status: string; completed_transfer_count?: number; reviewed_by?: string; reviewed_at?: string; reviewer_note?: string; state: string; authorization_reference?: string; package_hash?: string; error_message?: string; created_at: string; updated_at: string; }
@@ -129,6 +134,12 @@ export const api = {
   consents: (healthId: string) => request<Consent[]>("/consent/patients/" + encodeURIComponent(healthId) + "/consents"),
   authorizedPatients: () => request<AuthorizedPatient[]>("/consent/authorized-patients"),
   dismissProviderNotice: (id: string) => request<{ dismissed: boolean }>("/consent/provider-notices/" + encodeURIComponent(id) + "/dismiss", { method: "POST" }),
+  myJurisdictionRequests: () => request<ProviderJurisdictionRequest[]>("/provider-trust/providers/me/jurisdiction-requests"),
+  createJurisdictionRequest: (body: { requested_jurisdiction: string; reason: string }) =>
+    request<ProviderJurisdictionRequest>("/provider-trust/providers/me/jurisdiction-requests", { method: "POST", body: JSON.stringify(body) }),
+  jurisdictionRequests: () => request<ProviderJurisdictionRequest[]>("/provider-trust/jurisdiction-requests"),
+  reviewJurisdictionRequest: (id: string, decision: "APPROVE" | "REJECT", reviewer_note?: string) =>
+    request<ProviderJurisdictionRequest>("/provider-trust/jurisdiction-requests/" + encodeURIComponent(id) + "/review", { method: "POST", body: JSON.stringify({ decision, reviewer_note }) }),
   providers: () => request<Provider[]>("/provider-trust/providers"),
   onboardProvider: (body: { username:string; email:string; initial_password:string; given_name:string; family_name:string; license_number:string; jurisdiction:string }) =>
     request<{ provider:Provider; username:string; message:string }>("/provider-trust/providers/onboard",{method:"POST",body:JSON.stringify(body)}),
