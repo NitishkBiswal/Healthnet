@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { api, type AuditEvent, type DuplicateReview, type Transfer } from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
-type AuditorTab = "overview" | "identity" | "transfers" | "patient-audit" | "emergency-access" | "imports" | "integrity";
+type AuditorTab = "overview" | "identity" | "transfers" | "patient-audit" | "emergency-access" | "imports";
 
 const tabs: { id: AuditorTab; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -14,7 +14,6 @@ const tabs: { id: AuditorTab; label: string }[] = [
   { id: "patient-audit", label: "Patient Audit Trail" },
   { id: "emergency-access", label: "Emergency Access" },
   { id: "imports", label: "Import Audit" },
-  { id: "integrity", label: "Trust Integrity" },
 ];
 
 function EventCard({ event }: { event: AuditEvent }) {
@@ -38,7 +37,6 @@ export default function AuditorPortal() {
   const [activeTab, setActiveTab] = useState<AuditorTab>("overview");
   const [healthId, setHealthId] = useState("");
   const [events, setEvents] = useState<AuditEvent[] | null>(null);
-  const [integrity, setIntegrity] = useState<{ valid: boolean; entries_checked: number } | null>(null);
   const [reviews, setReviews] = useState<DuplicateReview[]>([]);
   const [transferReviews, setTransferReviews] = useState<Transfer[]>([]);
   const [transferRejectionReasons, setTransferRejectionReasons] = useState<Record<string, string>>({});
@@ -103,15 +101,6 @@ export default function AuditorPortal() {
     }
   }
 
-  async function verify() {
-    setError("");
-    try {
-      setIntegrity(await api.verifyLedger());
-    } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "Ledger verification failed");
-    }
-  }
-
   async function decide(id: string, decision: "APPROVED_DUPLICATE" | "APPROVED_PROFILE_UPDATE" | "REJECTED") {
     setError("");
     try {
@@ -149,7 +138,7 @@ export default function AuditorPortal() {
   const totalAuditEvents = importAudits.length + (events?.length ?? 0);
 
   return (
-    <PortalShell requiredRole="auditor" title="Auditor Portal" description="Independent oversight of identity decisions, repository transfers, audit trails and trust integrity.">
+    <PortalShell requiredRole="auditor" title="Auditor Portal" description="Independent oversight of identity decisions, repository transfers, emergency access and audit trails.">
       <div className="mb-5 flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
         {tabs.map((tab) => {
           const count = tab.id === "identity" ? pendingIdentityReviews : tab.id === "transfers" ? pendingTransferReviews : 0;
@@ -199,15 +188,19 @@ export default function AuditorPortal() {
                 </div>
               </div>
             </Card>
-            <Card title="Audit and integrity tools">
+            <Card title="Audit tools">
               <div className="space-y-3">
                 <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
                   <div><p className="font-semibold text-slate-900">Patient audit trail</p><p className="text-xs text-slate-600">Search audit events using a Health ID.</p></div>
                   <button type="button" onClick={() => setActiveTab("patient-audit")} className="text-sm font-bold text-cyan-800 underline">Open</button>
                 </div>
                 <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
-                  <div><p className="font-semibold text-slate-900">Trust ledger verification</p><p className="text-xs text-slate-600">Verify the ledger hash chain.</p></div>
-                  <button type="button" onClick={() => setActiveTab("integrity")} className="text-sm font-bold text-cyan-800 underline">Open</button>
+                  <div><p className="font-semibold text-slate-900">Emergency access audit</p><p className="text-xs text-slate-600">Review emergency declarations and summary access.</p></div>
+                  <button type="button" onClick={() => setActiveTab("emergency-access")} className="text-sm font-bold text-cyan-800 underline">Open</button>
+                </div>
+                <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
+                  <div><p className="font-semibold text-slate-900">Import audit</p><p className="text-xs text-slate-600">Inspect imported-record activity.</p></div>
+                  <button type="button" onClick={() => setActiveTab("imports")} className="text-sm font-bold text-cyan-800 underline">Open</button>
                 </div>
               </div>
             </Card>
@@ -316,18 +309,6 @@ export default function AuditorPortal() {
         </Card>
       )}
 
-      {activeTab === "integrity" && (
-        <Card title="Trust ledger integrity">
-          <p className="mb-4 text-sm text-slate-600">Run a read-only verification of the trust ledger hash chain.</p>
-          <button type="button" onClick={() => void verify()} className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">Verify ledger chain</button>
-          {integrity !== null && (
-            <div className={`mt-4 rounded-lg border p-4 ${integrity.valid ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
-              <p className="font-bold">{integrity.valid ? "Ledger integrity verified" : "Ledger integrity check failed"}</p>
-              <p className="mt-1 text-sm">Entries checked: {integrity.entries_checked}</p>
-            </div>
-          )}
-        </Card>
-      )}
 
       {error && <p role="alert" className="mt-5 rounded-lg border-2 border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p>}
     </PortalShell>
