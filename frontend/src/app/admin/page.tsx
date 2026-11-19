@@ -313,7 +313,7 @@ export default function AdminPortal() {
                     {item.state === "PENDING_AUDITOR_REVIEW" && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs font-semibold text-amber-900">Waiting for independent Auditor approval. Transfer execution is disabled.</p>}
                     {item.state === "REQUESTED" && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-700">Waiting for patient authorization.</p>}
                     {item.state === "REJECTED" && item.reviewer_note && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900"><strong>Rejection reason:</strong> {item.reviewer_note}</p>}
-                    {item.error_message && <p className="mt-2 text-xs text-red-700">{item.error_message}</p>
+                    {item.error_message && <p className="mt-2 text-xs text-red-700">{item.error_message}</p>}
                     {item.package_hash && <p className="mt-2 break-all text-xs text-slate-500">Verified package SHA-256: {item.package_hash}</p>}
                   </div>
                 );
