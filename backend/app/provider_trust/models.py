@@ -33,3 +33,21 @@ class PractitionerRole(Base):
     organization_id:Mapped[UUID]=mapped_column(Uuid(as_uuid=True),ForeignKey("healthnet.organization.id"),index=True)
     role:Mapped[str]=mapped_column(String(32))
     active:Mapped[bool]=mapped_column(Boolean,default=True)
+
+
+class ProviderJurisdictionRequest(Base):
+    __tablename__ = "provider_jurisdiction_request"
+    __table_args__ = {"schema": "healthnet"}
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    provider_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("healthnet.provider.id"), index=True
+    )
+    current_jurisdiction: Mapped[str] = mapped_column(String(32))
+    requested_jurisdiction: Mapped[str] = mapped_column(String(32))
+    reason: Mapped[str] = mapped_column(String(1000))
+    status: Mapped[str] = mapped_column(String(16), default="PENDING", index=True)
+    reviewer_subject: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    reviewer_note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
