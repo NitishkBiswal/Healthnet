@@ -34,6 +34,7 @@ from app.security.dependencies import require_role
 from app.security.rbac import Role
 
 router = APIRouter(tags=["Medical Record Import"])
+admin_dependency = require_role(Role.ADMIN)
 UPLOAD_FILE = File(...)
 
 
@@ -166,7 +167,7 @@ async def _add_emergency_condition(session: AsyncSession, health_id: str, displa
 @router.post("/imports/csv-excel")
 async def import_csv_excel(
     file: UploadFile = UPLOAD_FILE,
-    user: dict = Depends(require_role(Role.ADMIN)),
+    user: dict = Depends(admin_dependency),
     session: AsyncSession = Depends(get_db),
 ):
     content = await file.read(MAX_UPLOAD_BYTES + 1)

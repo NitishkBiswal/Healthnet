@@ -3,11 +3,21 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { api, type AuthorizedPatient, type Principal } from "@/lib/api";
+import { api, type AuthorizedPatient, type BreakGlassSummary, type Principal, type ProviderJurisdictionRequest } from "@/lib/api";
+
+type DoctorTab = "overview" | "patients" | "jurisdiction" | "emergency";
+
+const tabs: { id: DoctorTab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "patients", label: "Patients & Records" },
+  { id: "jurisdiction", label: "Jurisdiction" },
+  { id: "emergency", label: "Emergency Access" },
+];
 import { Card, PortalShell } from "@/components/portal-shell";
 
 export default function DoctorPortal() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<DoctorTab>("overview");
   const [healthId, setHealthId] = useState("");
   const [purpose, setPurpose] = useState("TREATMENT");
   const [scope, setScope] = useState("clinical");
@@ -15,8 +25,19 @@ export default function DoctorPortal() {
   const [authorized, setAuthorized] = useState<AuthorizedPatient[]>([]);
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [principal, setPrincipal] = useState<Principal | null>(null);
+  const [jurisdictionRequests, setJurisdictionRequests] = useState<ProviderJurisdictionRequest[]>([]);
+  const [requestedJurisdiction, setRequestedJurisdiction] = useState("");
+  const [jurisdictionReason, setJurisdictionReason] = useState("");
+  const [jurisdictionMessage, setJurisdictionMessage] = useState("");
   const [dismissedConsents, setDismissedConsents] = useState<string[]>([]);
   const [dismissalsLoaded, setDismissalsLoaded] = useState(false);
+  const [emergencyHealthId, setEmergencyHealthId] = useState("");
+  const [emergencyReason, setEmergencyReason] = useState("");
+  const [emergencyConfirmed, setEmergencyConfirmed] = useState(false);
+  const [emergencyBusy, setEmergencyBusy] = useState(false);
+  const [emergencyError, setEmergencyError] = useState("");
+  const [emergencyMessage, setEmergencyMessage] = useState("");
+  const [emergencySummary, setEmergencySummary] = useState<BreakGlassSummary | null>(null);
 
   // This is a provider-specific dashboard preference. Dismissing a notice
   // never changes the consent record or its audit history.
@@ -63,9 +84,34 @@ export default function DoctorPortal() {
 
   async function loadPrincipal() {
     try {
-      setPrincipal(await api.currentPrincipal());
+      const current = await api.currentPrincipal();
+      setPrincipal(current);
+      if (current.provider_id) {
+        setJurisdictionRequests(await api.myJurisdictionRequests());
+      }
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "Unable to load doctor identity");
+    }
+  }
+
+  async function submitJurisdictionRequest() {
+    setError("");
+    setJurisdictionMessage("");
+    if (jurisdictionReason.trim().length < 10) {
+      setError("Please explain the reason for the transfer (at least 10 characters).");
+      return;
+    }
+    try {
+      await api.createJurisdictionRequest({
+        requested_jurisdiction: requestedJurisdiction.trim().toUpperCase(),
+        reason: jurisdictionReason.trim(),
+      });
+      setJurisdictionMessage("Your jurisdiction transfer request has been submitted for Admin review.");
+      setRequestedJurisdiction("");
+      setJurisdictionReason("");
+      setJurisdictionRequests(await api.myJurisdictionRequests());
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Could not submit jurisdiction transfer request");
     }
   }
 
@@ -95,6 +141,48 @@ export default function DoctorPortal() {
     }
   }
 
+  async function requestEmergencyAccess() {
+    setEmergencyError("");
+    setEmergencyMessage("");
+    setEmergencySummary(null);
+    if (!emergencyHealthId.trim()) {
+      setEmergencyError("Enter the patient's Health ID.");
+      return;
+    }
+    if (emergencyReason.trim().length < 10) {
+      setEmergencyError("Provide an emergency justification of at least 10 characters.");
+      return;
+    }
+    if (!emergencyConfirmed) {
+      setEmergencyError("Confirm that this is a genuine emergency and normal consent cannot reasonably be obtained.");
+      return;
+    }
+    setEmergencyBusy(true);
+    try {
+      await api.invokeBreakGlass(emergencyHealthId.trim().toUpperCase(), emergencyReason.trim());
+      const summary = await api.breakGlassSummary(emergencyHealthId.trim().toUpperCase());
+      setEmergencySummary(summary);
+      setEmergencyMessage("Emergency access granted. Only the patient's recorded emergency-relevant chronic conditions are shown.");
+      setEmergencyReason("");
+      setEmergencyConfirmed(false);
+    } catch (reason: unknown) {
+      setEmergencyError(reason instanceof Error ? reason.message : "Emergency access could not be completed.");
+    } finally {
+      setEmergencyBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!emergencySummary) return;
+    const remaining = new Date(emergencySummary.access_expires_at).getTime() - Date.now();
+    if (remaining <= 0) {
+      setEmergencySummary(null);
+      return;
+    }
+    const timer = window.setTimeout(() => setEmergencySummary(null), remaining);
+    return () => window.clearTimeout(timer);
+  }, [emergencySummary]);
+
   function openLongitudinalView() {
     setError("");
     if (!healthId) {
@@ -113,7 +201,59 @@ export default function DoctorPortal() {
       description="Review patients who have granted you access and open their clinical history when needed."
     >
       <div className="space-y-5">
-        <Card title="Your HealthNet Provider ID">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+              className={`rounded-lg px-4 py-2.5 text-sm font-bold transition ${activeTab === tab.id ? "bg-slate-950 text-white shadow" : "text-slate-700 hover:bg-slate-100"}`}
+            >
+              {tab.label}
+              {tab.id === "patients" && authorized.length > 0 && (
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${activeTab === tab.id ? "bg-white/20 text-white" : "bg-cyan-100 text-cyan-900"}`}>{authorized.length}</span>
+              )}
+              {tab.id === "jurisdiction" && jurisdictionRequests.some((item) => item.status === "PENDING") && (
+                <span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" aria-label="Pending request" />
+              )}
+            </button>
+          ))}
+          <button type="button" onClick={() => { void loadPrincipal(); void loadAuthorized(); }} className="ml-auto rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Refresh data</button>
+        </div>
+
+        {activeTab === "overview" && (
+          <div className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm font-semibold text-slate-600">HealthNet Provider ID</p>
+                <p className="mt-2 font-mono text-lg font-bold text-slate-950">{principal?.provider_id || "Not linked"}</p>
+                <p className="mt-1 text-xs text-slate-500">Share this ID with patients when they grant consent.</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm font-semibold text-slate-600">Patients with access</p>
+                <p className="mt-2 text-3xl font-bold tabular-nums text-slate-950">{visibleAuthorized.filter((patient) => patient.status !== "REVOKED").length}</p>
+                <p className="mt-1 text-xs text-slate-500">Patients with current consent or authorization.</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm font-semibold text-slate-600">Registered jurisdiction</p>
+                <p className="mt-2 font-mono text-lg font-bold text-slate-950">{principal?.provider_jurisdiction || "Not available"}</p>
+                <p className="mt-1 text-xs text-slate-500">{jurisdictionRequests.filter((item) => item.status === "PENDING").length} pending transfer requests.</p>
+              </div>
+            </div>
+            <Card title="Workspace shortcuts">
+              <p className="mb-4 text-sm text-slate-600">Choose a workspace area to continue.</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <button type="button" onClick={() => setActiveTab("patients")} className="rounded-xl border border-slate-200 p-4 text-left transition hover:border-cyan-500 hover:bg-cyan-50"><p className="font-bold text-slate-950">Patients & Records</p><p className="mt-1 text-sm text-slate-600">Review patient consent and open authorized longitudinal records.</p></button>
+                <button type="button" onClick={() => setActiveTab("jurisdiction")} className="rounded-xl border border-slate-200 p-4 text-left transition hover:border-cyan-500 hover:bg-cyan-50"><p className="font-bold text-slate-950">Jurisdiction</p><p className="mt-1 text-sm text-slate-600">View your registered region and request an Admin-approved transfer.</p></button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {activeTab === "patients" && (
+          <div className="space-y-5">
+            <Card title="Your HealthNet Provider ID">
           <p className="text-sm text-slate-700">
             Patients use this Provider ID when granting you consent.
           </p>
@@ -128,7 +268,7 @@ export default function DoctorPortal() {
           )}
         </Card>
 
-        <Card title="Patients who have granted you access">
+            <Card title="Patients who have granted you access">
           {visibleAuthorized.length === 0 ? (
             <div className="rounded-lg bg-slate-50 p-4">
               <p className="text-sm font-medium text-slate-700">
@@ -220,7 +360,7 @@ export default function DoctorPortal() {
           )}
         </Card>
 
-        <Card title="Patient record">
+            <Card title="Patient record">
           {healthId ? (
             <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-5">
               <p className="text-xs font-bold uppercase tracking-wide text-cyan-800">Selected patient</p>
@@ -251,6 +391,80 @@ export default function DoctorPortal() {
           )}
           {error && <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>}
         </Card>
+
+          </div>
+        )}
+
+        {activeTab === "emergency" && (
+          <div className="space-y-5">
+            <Card title="Emergency break-glass access">
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                <p className="font-bold">For genuine medical emergencies only</p>
+                <p className="mt-1">Use this only when urgent care is required and the patient cannot reasonably provide consent. This grants one-time, read-only access to recorded emergency-relevant chronic conditions only. It does not open the full medical record.</p>
+              </div>
+              <div className="mt-4 space-y-3">
+                <label className="block text-sm font-semibold text-slate-800" htmlFor="emergency-health-id">Patient Health ID</label>
+                <input id="emergency-health-id" value={emergencyHealthId} onChange={(event) => { setEmergencyHealthId(event.target.value.toUpperCase()); setEmergencySummary(null); setEmergencyError(""); }} placeholder="Enter patient Health ID" maxLength={32} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900" />
+                <label className="block text-sm font-semibold text-slate-800" htmlFor="emergency-reason">Emergency justification</label>
+                <textarea id="emergency-reason" value={emergencyReason} onChange={(event) => setEmergencyReason(event.target.value)} rows={3} maxLength={1000} placeholder="Explain the emergency and why consent cannot reasonably be obtained (minimum 10 characters)." className="w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900" />
+                <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                  <input type="checkbox" checked={emergencyConfirmed} onChange={(event) => setEmergencyConfirmed(event.target.checked)} className="mt-1" />
+                  <span>I confirm this is a genuine emergency and normal patient consent cannot reasonably be obtained.</span>
+                </label>
+                <button type="button" onClick={() => void requestEmergencyAccess()} disabled={emergencyBusy || !emergencyHealthId.trim() || emergencyReason.trim().length < 10 || !emergencyConfirmed} className="rounded-lg bg-amber-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-40">
+                  {emergencyBusy ? "Verifying emergency access..." : "Request emergency summary"}
+                </button>
+                {emergencyError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{emergencyError}</p>}
+                {emergencyMessage && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{emergencyMessage}</p>}
+              </div>
+            </Card>
+            {emergencySummary && (
+              <Card title="Restricted emergency chronic-condition summary">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-mono text-sm font-bold text-slate-900">{emergencySummary.health_id}</p>
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">One-time access · expires {new Date(emergencySummary.access_expires_at).toLocaleTimeString()}</span>
+                </div>
+                <p className="mt-3 text-sm text-slate-600">Only emergency-relevant chronic conditions explicitly recorded in HealthNet are displayed.</p>
+                <ul className="mt-3 space-y-2">
+                  {emergencySummary.chronic_conditions.map((condition, index) => <li key={index} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-slate-900">{condition}</li>)}
+                </ul>
+                <p className="mt-3 text-xs text-slate-500">This access is logged for retrospective Auditor review. Refreshing or closing this page clears the displayed summary; the authorization cannot be reused.</p>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {activeTab === "jurisdiction" && (
+          <div className="space-y-5">
+            <Card title="Your jurisdiction">
+          <p className="text-sm text-slate-700">Your current registered jurisdiction</p>
+          <p className="mt-2 rounded-lg bg-cyan-50 px-3 py-2 font-mono text-sm font-bold text-slate-950">{principal?.provider_jurisdiction || "Not available"}</p>
+          <p className="mt-3 text-xs text-slate-600">If you move to a hospital in another jurisdiction, submit a request here. Only an Admin can approve the change; your registered jurisdiction remains unchanged until approval.</p>
+          {jurisdictionRequests.some((item) => item.status === "PENDING") ? (
+            <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">You already have a pending jurisdiction transfer request. Wait for Admin review before submitting another.</p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              <input value={requestedJurisdiction} onChange={(event) => setRequestedJurisdiction(event.target.value)} placeholder="Requested jurisdiction (e.g. IN-KA)" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900" />
+              <textarea value={jurisdictionReason} onChange={(event) => setJurisdictionReason(event.target.value)} rows={2} maxLength={1000} placeholder="Explain why you need to transfer to this jurisdiction (minimum 10 characters)." className="w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900" />
+              <button type="button" onClick={() => void submitJurisdictionRequest()} disabled={requestedJurisdiction.trim().length < 2 || jurisdictionReason.trim().length < 10} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Submit jurisdiction transfer request</button>
+              {jurisdictionMessage && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{jurisdictionMessage}</p>}
+            </div>
+          )}
+          {jurisdictionRequests.length > 0 && <div className="mt-4 space-y-2">
+            <p className="text-sm font-bold text-slate-800">Request history</p>
+            {jurisdictionRequests.map((item) => <div key={item.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+              <div className="flex flex-wrap justify-between gap-2"><strong>{item.current_jurisdiction} → {item.requested_jurisdiction}</strong><span className="font-bold">{item.status}</span></div>
+              <p className="mt-1 text-slate-600">Reason: {item.reason}</p>
+              <p className="mt-1 text-xs text-slate-500">Submitted {new Date(item.created_at).toLocaleString()}</p>
+              {item.reviewer_note && <p className="mt-2 rounded-lg bg-red-50 p-2 text-sm text-red-900">Admin response: {item.reviewer_note}</p>}
+            </div>)}
+          </div>}
+        </Card>
+
+          </div>
+        )}
+
+        {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
       </div>
     </PortalShell>
   );

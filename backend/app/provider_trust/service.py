@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from uuid import UUID
 import asyncio
 import logging
@@ -9,14 +10,18 @@ import urllib.request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.provider_trust.models import Organization, Provider, PractitionerRole
+from app.provider_trust.models import Organization, Provider, PractitionerRole, ProviderJurisdictionRequest
+from app.audit.schemas import AuditEventCreate, AuditEventType
+from app.audit.service import AuditService
 from app.core.config import settings
+from app.repository.models import Repository
 from app.provider_trust.schemas import (
     OrganizationCreate,
     ProviderCreate,
     PractitionerRoleCreate,
     TrustStatus,
     ProviderOnboardRequest,
+    ProviderJurisdictionRequestCreate,
 )
 
 logger = logging.getLogger(__name__)
@@ -157,6 +162,140 @@ class ProviderTrustService:
         x.trust_status = status.value
         await self.session.flush()
         return x
+
+    async def create_jurisdiction_request(
+        self, provider_subject: str, request: ProviderJurisdictionRequestCreate
+    ) -> ProviderJurisdictionRequest:
+        provider = await self.session.scalar(
+            select(Provider).where(Provider.keycloak_subject == provider_subject)
+        )
+        if provider is None:
+            raise ValueError("Your account is not linked to a HealthNet provider")
+        if provider.trust_status != TrustStatus.ACTIVE.value:
+            raise ValueError("Only active providers can request a jurisdiction transfer")
+        requested = request.requested_jurisdiction.strip().upper()
+        reason = request.reason.strip()
+        if len(reason) < 10:
+            raise ValueError("Please provide a transfer reason of at least 10 characters")
+        if not requested:
+            raise ValueError("Requested jurisdiction is required")
+        if requested == provider.jurisdiction.upper():
+            raise ValueError("You are already registered in this jurisdiction")
+        destination_exists = await self.session.scalar(
+            select(Repository.id).where(
+                Repository.jurisdiction == requested,
+                Repository.status.in_(["ONLINE", "DEGRADED"]),
+            ).limit(1)
+        )
+        if destination_exists is None:
+            raise ValueError("No online HealthNet repository is configured for the requested jurisdiction")
+        pending = await self.session.scalar(
+            select(ProviderJurisdictionRequest).where(
+                ProviderJurisdictionRequest.provider_id == provider.id,
+                ProviderJurisdictionRequest.status == "PENDING",
+            )
+        )
+        if pending:
+            raise ValueError("You already have a pending jurisdiction transfer request")
+        item = ProviderJurisdictionRequest(
+            provider_id=provider.id,
+            current_jurisdiction=provider.jurisdiction,
+            requested_jurisdiction=requested,
+            reason=reason,
+            status="PENDING",
+        )
+        self.session.add(item)
+        await self.session.flush()
+        await AuditService(self.session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.POLICY_DECISION,
+                actor_id=provider_subject,
+                action="PROVIDER_JURISDICTION_TRANSFER_REQUESTED",
+                payload={
+                    "request_id": str(item.id),
+                    "provider_id": str(provider.id),
+                    "from_jurisdiction": item.current_jurisdiction,
+                    "to_jurisdiction": item.requested_jurisdiction,
+                    "reason": item.reason,
+                },
+            )
+        )
+        return item
+
+    async def list_my_jurisdiction_requests(self, provider_subject: str):
+        provider = await self.session.scalar(
+            select(Provider).where(Provider.keycloak_subject == provider_subject)
+        )
+        if provider is None:
+            raise ValueError("Your account is not linked to a HealthNet provider")
+        result = await self.session.execute(
+            select(ProviderJurisdictionRequest)
+            .where(ProviderJurisdictionRequest.provider_id == provider.id)
+            .order_by(ProviderJurisdictionRequest.created_at.desc())
+        )
+        return list(result.scalars())
+
+    async def list_jurisdiction_requests(self):
+        result = await self.session.execute(
+            select(ProviderJurisdictionRequest, Provider)
+            .join(Provider, Provider.id == ProviderJurisdictionRequest.provider_id)
+            .order_by(ProviderJurisdictionRequest.created_at.desc())
+        )
+        return [
+            {
+                **{column.name: getattr(item, column.name) for column in ProviderJurisdictionRequest.__table__.columns},
+                "provider_external_id": provider.external_id,
+                "provider_name": f"{provider.given_name} {provider.family_name}",
+            }
+            for item, provider in result.all()
+        ]
+
+    async def review_jurisdiction_request(
+        self, request_id: UUID, reviewer_subject: str, decision: str, reviewer_note: str | None
+    ):
+        item = await self.session.scalar(
+            select(ProviderJurisdictionRequest)
+            .where(ProviderJurisdictionRequest.id == request_id)
+            .with_for_update()
+        )
+        if item is None:
+            raise ValueError("Jurisdiction transfer request not found")
+        if item.status != "PENDING":
+            raise ValueError("This request has already been reviewed")
+        provider = await self.session.scalar(
+            select(Provider).where(Provider.id == item.provider_id).with_for_update()
+        )
+        if provider is None:
+            raise ValueError("Provider not found")
+        if provider.jurisdiction != item.current_jurisdiction:
+            raise ValueError("Provider jurisdiction changed after this request was submitted; refresh and submit a new request")
+        if decision == "APPROVE":
+            provider.jurisdiction = item.requested_jurisdiction
+            item.status = "APPROVED"
+        else:
+            note = (reviewer_note or "").strip()
+            if len(note) < 10:
+                raise ValueError("A rejection reason of at least 10 characters is required")
+            item.status = "REJECTED"
+            item.reviewer_note = note
+        item.reviewer_subject = reviewer_subject
+        item.reviewed_at = datetime.now(UTC)
+        await self.session.flush()
+        await AuditService(self.session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.POLICY_DECISION,
+                actor_id=reviewer_subject,
+                action="PROVIDER_JURISDICTION_TRANSFER_" + item.status,
+                payload={
+                    "request_id": str(item.id),
+                    "provider_id": str(provider.id),
+                    "from_jurisdiction": item.current_jurisdiction,
+                    "to_jurisdiction": item.requested_jurisdiction,
+                    "reviewer_note": item.reviewer_note,
+                },
+            )
+        )
+        return item
 
     async def assign_role(self, request: PractitionerRoleCreate) -> PractitionerRole:
         if (

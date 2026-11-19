@@ -87,6 +87,8 @@ def test_emergency_and_longitudinal_routes_are_registered() -> None:
     paths = app.openapi()["paths"]
     assert "get" in paths["/api/v1/emergency/patients/{health_id}/emergency-profile"]
     assert "post" in paths["/api/v1/emergency/patients/{health_id}/break-glass"]
+    assert "get" in paths["/api/v1/emergency/patients/{health_id}/break-glass-summary"]
+    assert "get" in paths["/api/v1/audit/emergency-access"]
 
 def test_break_glass_requires_a_reason_and_defaults_to_minimal_tier() -> None:
     from pydantic import ValidationError
@@ -94,6 +96,9 @@ def test_break_glass_requires_a_reason_and_defaults_to_minimal_tier() -> None:
 
     request = BreakGlassRequest(reason="Patient is unconscious and unable to consent")
     assert request.tier == RetrievalTier.TIER_1
+    assert request.emergency_declaration is False
+    confirmed = BreakGlassRequest(reason="Patient is unconscious and unable to consent", emergency_declaration=True)
+    assert confirmed.emergency_declaration is True
     with pytest.raises(ValidationError):
         BreakGlassRequest(reason="no")
 
