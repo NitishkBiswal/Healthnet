@@ -42,4 +42,5 @@ async def current_principal(
             f"{provider.given_name} {provider.family_name}" if provider else None
         ),
         "provider_status": provider.trust_status if provider else None,
+        "provider_jurisdiction": provider.jurisdiction if provider else None,
     }
