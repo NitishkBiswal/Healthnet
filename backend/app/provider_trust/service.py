@@ -11,6 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.provider_trust.models import Organization, Provider, PractitionerRole, ProviderJurisdictionRequest
+from app.audit.schemas import AuditEventCreate, AuditEventType
+from app.audit.service import AuditService
 from app.core.config import settings
 from app.provider_trust.schemas import (
     OrganizationCreate,
@@ -171,6 +173,8 @@ class ProviderTrustService:
         if provider.trust_status != TrustStatus.ACTIVE.value:
             raise ValueError("Only active providers can request a jurisdiction transfer")
         requested = request.requested_jurisdiction.strip().upper()
+        if not requested:
+            raise ValueError("Requested jurisdiction is required")
         if requested == provider.jurisdiction.upper():
             raise ValueError("You are already registered in this jurisdiction")
         pending = await self.session.scalar(
@@ -190,6 +194,20 @@ class ProviderTrustService:
         )
         self.session.add(item)
         await self.session.flush()
+        await AuditService(self.session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.POLICY_DECISION,
+                actor_id=provider_subject,
+                action="PROVIDER_JURISDICTION_TRANSFER_REQUESTED",
+                payload={
+                    "request_id": str(item.id),
+                    "provider_id": str(provider.id),
+                    "from_jurisdiction": item.current_jurisdiction,
+                    "to_jurisdiction": item.requested_jurisdiction,
+                    "reason": item.reason,
+                },
+            )
+        )
         return item
 
     async def list_my_jurisdiction_requests(self, provider_subject: str):
@@ -232,9 +250,13 @@ class ProviderTrustService:
             raise ValueError("Jurisdiction transfer request not found")
         if item.status != "PENDING":
             raise ValueError("This request has already been reviewed")
-        provider = await self.session.get(Provider, item.provider_id)
+        provider = await self.session.scalar(
+            select(Provider).where(Provider.id == item.provider_id).with_for_update()
+        )
         if provider is None:
             raise ValueError("Provider not found")
+        if provider.jurisdiction != item.current_jurisdiction:
+            raise ValueError("Provider jurisdiction changed after this request was submitted; refresh and submit a new request")
         if decision == "APPROVE":
             provider.jurisdiction = item.requested_jurisdiction
             item.status = "APPROVED"
@@ -247,6 +269,20 @@ class ProviderTrustService:
         item.reviewer_subject = reviewer_subject
         item.reviewed_at = datetime.now(UTC)
         await self.session.flush()
+        await AuditService(self.session).log_event(
+            AuditEventCreate(
+                event_type=AuditEventType.POLICY_DECISION,
+                actor_id=reviewer_subject,
+                action="PROVIDER_JURISDICTION_TRANSFER_" + item.status,
+                payload={
+                    "request_id": str(item.id),
+                    "provider_id": str(provider.id),
+                    "from_jurisdiction": item.current_jurisdiction,
+                    "to_jurisdiction": item.requested_jurisdiction,
+                    "reviewer_note": item.reviewer_note,
+                },
+            )
+        )
         return item
 
     async def assign_role(self, request: PractitionerRoleCreate) -> PractitionerRole:
