@@ -375,7 +375,16 @@ class MigrationService:
                     f"Could not export {resource_type} from source repository {source.code}: {type(exc).__name__}"
                 ) from exc
 
-        exported = list(exported_by_key.values())
+        # Import Patient first so HAPI can resolve references from clinical resources.
+        # Do this explicitly rather than relying on the configured resource_types order.
+        exported = sorted(
+            exported_by_key.values(),
+            key=lambda resource: (
+                0 if resource.get("resourceType") == "Patient" else 1,
+                resource.get("resourceType", ""),
+                resource.get("id", ""),
+            ),
+        )
         if not exported:
             raise ValueError("Source repository returned no FHIR resources for this patient")
         if request.resource_count and request.resource_count != len(exported):
