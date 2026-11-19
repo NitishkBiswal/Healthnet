@@ -471,7 +471,7 @@ class MigrationService:
                 error_details = (
                     f"HTTP {status_code}: {response_body[:2000]}"
                     if status_code is not None
-                    else f"{type(exc).__name__}: {str(exc)}"
+                    else f"{type(exc).__name__}: {exc!s}"
                 )
 
                 raise ValueError(
