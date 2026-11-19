@@ -4,10 +4,19 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { api, type AuthorizedPatient, type Principal, type ProviderJurisdictionRequest } from "@/lib/api";
+
+type DoctorTab = "overview" | "patients" | "jurisdiction";
+
+const tabs: { id: DoctorTab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "patients", label: "Patients & Records" },
+  { id: "jurisdiction", label: "Jurisdiction" },
+];
 import { Card, PortalShell } from "@/components/portal-shell";
 
 export default function DoctorPortal() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<DoctorTab>("overview");
   const [healthId, setHealthId] = useState("");
   const [purpose, setPurpose] = useState("TREATMENT");
   const [scope, setScope] = useState("clinical");
@@ -142,7 +151,71 @@ export default function DoctorPortal() {
       description="Review patients who have granted you access and open their clinical history when needed."
     >
       <div className="space-y-5">
-        <Card title="Your HealthNet Provider ID">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+              className={`rounded-lg px-4 py-2.5 text-sm font-bold transition ${activeTab === tab.id ? "bg-slate-950 text-white shadow" : "text-slate-700 hover:bg-slate-100"}`}
+            >
+              {tab.label}
+              {tab.id === "patients" && authorized.length > 0 && (
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${activeTab === tab.id ? "bg-white/20 text-white" : "bg-cyan-100 text-cyan-900"}`}>{authorized.length}</span>
+              )}
+              {tab.id === "jurisdiction" && jurisdictionRequests.some((item) => item.status === "PENDING") && (
+                <span className={`ml-2 inline-block h-2 w-2 rounded-full ${activeTab === tab.id ? "bg-amber-300" : "bg-amber-500"}`} aria-label="Pending request" />
+              )}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => { void loadPrincipal(); void loadAuthorized(); }}
+            className="ml-auto rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Refresh data
+          </button>
+        </div>
+
+        {activeTab === "overview" && (
+          <div className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm font-semibold text-slate-600">HealthNet Provider ID</p>
+                <p className="mt-2 font-mono text-lg font-bold text-slate-950">{principal?.provider_id || "Not linked"}</p>
+                <p className="mt-1 text-xs text-slate-500">Share this ID with patients when they grant consent.</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm font-semibold text-slate-600">Patients with access</p>
+                <p className="mt-2 text-3xl font-bold tabular-nums text-slate-950">{visibleAuthorized.filter((patient) => patient.status !== "REVOKED").length}</p>
+                <p className="mt-1 text-xs text-slate-500">Patients with current consent or authorization.</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm font-semibold text-slate-600">Registered jurisdiction</p>
+                <p className="mt-2 font-mono text-lg font-bold text-slate-950">{principal?.provider_jurisdiction || "Not available"}</p>
+                <p className="mt-1 text-xs text-slate-500">{jurisdictionRequests.filter((item) => item.status === "PENDING").length} pending transfer requests.</p>
+              </div>
+            </div>
+            <Card title="Workspace shortcuts">
+              <p className="mb-4 text-sm text-slate-600">Choose a workspace area to continue.</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <button type="button" onClick={() => setActiveTab("patients")} className="rounded-xl border border-slate-200 p-4 text-left transition hover:border-cyan-500 hover:bg-cyan-50">
+                  <p className="font-bold text-slate-950">Patients & Records</p>
+                  <p className="mt-1 text-sm text-slate-600">Review patient consent and open authorized longitudinal records.</p>
+                </button>
+                <button type="button" onClick={() => setActiveTab("jurisdiction")} className="rounded-xl border border-slate-200 p-4 text-left transition hover:border-cyan-500 hover:bg-cyan-50">
+                  <p className="font-bold text-slate-950">Jurisdiction</p>
+                  <p className="mt-1 text-sm text-slate-600">View your registered region and request an Admin-approved transfer.</p>
+                </button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {activeTab === "patients" && (
+          <div className="space-y-5">
+            <Card title="Your HealthNet Provider ID">
           <p className="text-sm text-slate-700">
             Patients use this Provider ID when granting you consent.
           </p>
@@ -157,6 +230,11 @@ export default function DoctorPortal() {
           )}
         </Card>
 
+          </div>
+        )}
+
+        {activeTab === "jurisdiction" && (
+          <div className="space-y-5">
         <Card title="Your jurisdiction">
           <p className="text-sm text-slate-700">Your current registered jurisdiction</p>
           <p className="mt-2 rounded-lg bg-cyan-50 px-3 py-2 font-mono text-sm font-bold text-slate-950">{principal?.provider_jurisdiction || "Not available"}</p>
@@ -274,6 +352,11 @@ export default function DoctorPortal() {
           )}
         </Card>
 
+          </div>
+        )}
+
+        {activeTab === "patients" && (
+          <div className="space-y-5">
         <Card title="Patient record">
           {healthId ? (
             <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-5">
@@ -305,6 +388,11 @@ export default function DoctorPortal() {
           )}
           {error && <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>}
         </Card>
+          </div>
+        )}
+        {error && (
+          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>
+        )}
       </div>
     </PortalShell>
   );
