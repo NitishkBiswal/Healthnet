@@ -3,7 +3,7 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0012_provider_jurisdiction_transfers"
+revision = "0012_provider_juris_xfer"
 down_revision = "0011_provider_notice_dismissals"
 branch_labels = None
 depends_on = None
