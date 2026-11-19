@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { api, type AuthorizedPatient, type Principal } from "@/lib/api";
+import { api, type AuthorizedPatient, type Principal, type ProviderJurisdictionRequest } from "@/lib/api";
 import { Card, PortalShell } from "@/components/portal-shell";
 
 export default function DoctorPortal() {
@@ -15,6 +15,10 @@ export default function DoctorPortal() {
   const [authorized, setAuthorized] = useState<AuthorizedPatient[]>([]);
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [principal, setPrincipal] = useState<Principal | null>(null);
+  const [jurisdictionRequests, setJurisdictionRequests] = useState<ProviderJurisdictionRequest[]>([]);
+  const [requestedJurisdiction, setRequestedJurisdiction] = useState("");
+  const [jurisdictionReason, setJurisdictionReason] = useState("");
+  const [jurisdictionMessage, setJurisdictionMessage] = useState("");
   const [dismissedConsents, setDismissedConsents] = useState<string[]>([]);
   const [dismissalsLoaded, setDismissalsLoaded] = useState(false);
 
@@ -63,9 +67,34 @@ export default function DoctorPortal() {
 
   async function loadPrincipal() {
     try {
-      setPrincipal(await api.currentPrincipal());
+      const current = await api.currentPrincipal();
+      setPrincipal(current);
+      if (current.provider_id) {
+        setJurisdictionRequests(await api.myJurisdictionRequests());
+      }
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "Unable to load doctor identity");
+    }
+  }
+
+  async function submitJurisdictionRequest() {
+    setError("");
+    setJurisdictionMessage("");
+    if (jurisdictionReason.trim().length < 10) {
+      setError("Please explain the reason for the transfer (at least 10 characters).");
+      return;
+    }
+    try {
+      await api.createJurisdictionRequest({
+        requested_jurisdiction: requestedJurisdiction.trim().toUpperCase(),
+        reason: jurisdictionReason.trim(),
+      });
+      setJurisdictionMessage("Your jurisdiction transfer request has been submitted for Admin review.");
+      setRequestedJurisdiction("");
+      setJurisdictionReason("");
+      setJurisdictionRequests(await api.myJurisdictionRequests());
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Could not submit jurisdiction transfer request");
     }
   }
 
@@ -126,6 +155,31 @@ export default function DoctorPortal() {
               <p className="mt-1 break-all font-mono">{principal.subject}</p>
             </div>
           )}
+        </Card>
+
+        <Card title="Your jurisdiction">
+          <p className="text-sm text-slate-700">Your current registered jurisdiction</p>
+          <p className="mt-2 rounded-lg bg-cyan-50 px-3 py-2 font-mono text-sm font-bold text-slate-950">{principal?.provider_jurisdiction || "Not available"}</p>
+          <p className="mt-3 text-xs text-slate-600">If you move to a hospital in another jurisdiction, submit a request here. Only an Admin can approve the change; your registered jurisdiction remains unchanged until approval.</p>
+          {jurisdictionRequests.some((item) => item.status === "PENDING") ? (
+            <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">You already have a pending jurisdiction transfer request. Wait for Admin review before submitting another.</p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              <input value={requestedJurisdiction} onChange={(event) => setRequestedJurisdiction(event.target.value)} placeholder="Requested jurisdiction (e.g. IN-KA)" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900" />
+              <textarea value={jurisdictionReason} onChange={(event) => setJurisdictionReason(event.target.value)} rows={2} maxLength={1000} placeholder="Explain why you need to transfer to this jurisdiction (minimum 10 characters)." className="w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900" />
+              <button type="button" onClick={() => void submitJurisdictionRequest()} disabled={requestedJurisdiction.trim().length < 2 || jurisdictionReason.trim().length < 10} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Submit jurisdiction transfer request</button>
+              {jurisdictionMessage && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{jurisdictionMessage}</p>}
+            </div>
+          )}
+          {jurisdictionRequests.length > 0 && <div className="mt-4 space-y-2">
+            <p className="text-sm font-bold text-slate-800">Request history</p>
+            {jurisdictionRequests.map((item) => <div key={item.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+              <div className="flex flex-wrap justify-between gap-2"><strong>{item.current_jurisdiction} → {item.requested_jurisdiction}</strong><span className="font-bold">{item.status}</span></div>
+              <p className="mt-1 text-slate-600">Reason: {item.reason}</p>
+              <p className="mt-1 text-xs text-slate-500">Submitted {new Date(item.created_at).toLocaleString()}</p>
+              {item.reviewer_note && <p className="mt-2 rounded-lg bg-red-50 p-2 text-sm text-red-900">Admin response: {item.reviewer_note}</p>}
+            </div>)}
+          </div>}
         </Card>
 
         <Card title="Patients who have granted you access">
