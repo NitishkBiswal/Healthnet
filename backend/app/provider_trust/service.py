@@ -14,6 +14,7 @@ from app.provider_trust.models import Organization, Provider, PractitionerRole, 
 from app.audit.schemas import AuditEventCreate, AuditEventType
 from app.audit.service import AuditService
 from app.core.config import settings
+from app.repository.models import Repository
 from app.provider_trust.schemas import (
     OrganizationCreate,
     ProviderCreate,
@@ -177,6 +178,14 @@ class ProviderTrustService:
             raise ValueError("Requested jurisdiction is required")
         if requested == provider.jurisdiction.upper():
             raise ValueError("You are already registered in this jurisdiction")
+        destination_exists = await self.session.scalar(
+            select(Repository.id).where(
+                Repository.jurisdiction == requested,
+                Repository.status.in_(["ONLINE", "DEGRADED"]),
+            ).limit(1)
+        )
+        if destination_exists is None:
+            raise ValueError("No online HealthNet repository is configured for the requested jurisdiction")
         pending = await self.session.scalar(
             select(ProviderJurisdictionRequest).where(
                 ProviderJurisdictionRequest.provider_id == provider.id,
