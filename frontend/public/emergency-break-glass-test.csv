@@ -1,0 +1,2 @@
+health_id,record_type,record_id,display,code,code_system,status,recorded_at,value,unit,source_hospital,is_chronic,emergency_relevant
+REPLACE_WITH_REGISTERED_HEALTH_ID,CONDITION,break-glass-test-condition-001,Type 2 diabetes mellitus,44054006,http://snomed.info/sct,active,2026-01-15,,,HealthNet Demo Hospital,TRUE,TRUE
