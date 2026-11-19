@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type MedicalImportResult, type Provider, type Repository, type RepositorySummary, type Transfer } from "@/lib/api";
+import { api, type MedicalImportResult, type Provider, type Repository, type RepositorySummary, type Transfer, type ProviderJurisdictionRequest } from "@/lib/api";
 import { Card, Field, PortalShell } from "@/components/portal-shell";
 
 type AdminTab = "overview" | "repositories" | "integrations" | "transfers" | "providers" | "imports";
@@ -25,6 +25,8 @@ export default function AdminPortal() {
   const [repos, setRepos] = useState<Repository[]>([]);
   const [repoSummaries, setRepoSummaries] = useState<RepositorySummary[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [jurisdictionRequests, setJurisdictionRequests] = useState<ProviderJurisdictionRequest[]>([]);
+  const [jurisdictionReviewNotes, setJurisdictionReviewNotes] = useState<Record<string, string>>({});
   const [adminTransfers, setAdminTransfers] = useState<Transfer[]>([]);
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
@@ -48,8 +50,11 @@ export default function AdminPortal() {
   }
 
   async function loadProviders() {
-    try { setProviders(await api.providers()); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not load providers"); }
+    try {
+      const [items, requests] = await Promise.all([api.providers(), api.jurisdictionRequests()]);
+      setProviders(items);
+      setJurisdictionRequests(requests);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not load providers and jurisdiction requests"); }
   }
 
   async function loadRepositories() {
@@ -117,6 +122,22 @@ export default function AdminPortal() {
     try { setImportResult(await api.importMedicalRecords(importFile)); }
     catch (e) { setError(e instanceof Error ? e.message : "Medical record import failed"); }
     finally { setImportBusy(false); }
+  }
+
+  async function reviewJurisdictionRequest(item: ProviderJurisdictionRequest, decision: "APPROVE" | "REJECT") {
+    const note = (jurisdictionReviewNotes[item.id] ?? "").trim();
+    if (decision === "REJECT" && note.length < 10) {
+      setError("Enter a rejection reason of at least 10 characters.");
+      return;
+    }
+    setError("");
+    try {
+      await api.reviewJurisdictionRequest(item.id, decision, note || undefined);
+      setJurisdictionReviewNotes((values) => ({ ...values, [item.id]: "" }));
+      await loadProviders();
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Could not review jurisdiction request");
+    }
   }
 
   async function registerProvider() {
@@ -325,6 +346,7 @@ export default function AdminPortal() {
       )}
 
       {activeTab === "providers" && (
+        <div className="space-y-5">
         <div className="grid gap-5 lg:grid-cols-2">
           <Card title="Register a healthcare provider">
             <p className="text-sm text-slate-700">Create the doctor account and HealthNet Provider ID together. HealthNet generates the Provider ID automatically; the doctor will see it after login.</p>
@@ -352,6 +374,33 @@ export default function AdminPortal() {
               ))}</div>
             )}
           </Card>
+        </div>
+        <Card title="Doctor jurisdiction transfer requests">
+          <p className="mb-3 text-sm text-slate-600">Only administrators can approve or reject a doctor's request to change their registered jurisdiction. Approval updates the provider's active jurisdiction.</p>
+          {jurisdictionRequests.length === 0 ? <p className="text-sm text-slate-600">No jurisdiction transfer requests have been submitted.</p> : (
+            <div className="space-y-3">
+              {jurisdictionRequests.map((item) => (
+                <div key={item.id} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong>{item.provider_name || item.provider_external_id || item.provider_id}</strong>
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${item.status === "PENDING" ? "bg-amber-100 text-amber-900" : item.status === "APPROVED" ? "bg-emerald-100 text-emerald-900" : "bg-red-100 text-red-900"}`}>{item.status}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-700">Provider ID: {item.provider_external_id || item.provider_id}</p>
+                  <p className="mt-1 text-sm text-slate-700">Jurisdiction: <strong>{item.current_jurisdiction}</strong> → <strong>{item.requested_jurisdiction}</strong></p>
+                  <p className="mt-2 text-sm text-slate-700">Doctor's reason: {item.reason}</p>
+                  <p className="mt-1 text-xs text-slate-500">Submitted {new Date(item.created_at).toLocaleString()}</p>
+                  {item.status === "PENDING" ? <>
+                    <textarea value={jurisdictionReviewNotes[item.id] ?? ""} onChange={(event) => setJurisdictionReviewNotes((values) => ({ ...values, [item.id]: event.target.value }))} rows={2} maxLength={1000} placeholder="Rejection reason (required only when rejecting)" className="mt-3 w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900" />
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => void reviewJurisdictionRequest(item, "APPROVE")} className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white">Approve jurisdiction transfer</button>
+                      <button type="button" disabled={(jurisdictionReviewNotes[item.id] ?? "").trim().length < 10} onClick={() => void reviewJurisdictionRequest(item, "REJECT")} className="rounded-lg border border-red-300 px-4 py-2 text-xs font-bold text-red-700 disabled:opacity-40">Reject request</button>
+                    </div>
+                  </> : item.reviewer_note && <p className="mt-2 rounded-lg bg-red-50 p-3 text-sm text-red-900">Admin note: {item.reviewer_note}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
         </div>
       )}
 
