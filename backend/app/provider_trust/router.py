@@ -25,8 +25,9 @@ from app.security.rbac import Role
 router = APIRouter(tags=["Provider Trust"])
 
 
-def require_admin():
-    return require_role(Role.ADMIN)
+# Use the role checker itself as the FastAPI dependency. Returning it from a
+# dependency function would inject the function object instead of the user claims.
+require_admin = require_role(Role.ADMIN)
 
 
 @router.post(
