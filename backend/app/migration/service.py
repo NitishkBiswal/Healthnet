@@ -146,8 +146,8 @@ class MigrationService:
             item.review_status = "APPROVED"
             item.state = MigrationState.PATIENT_AUTHORIZED.value
         else:
-            if not reviewer_note or not reviewer_note.strip():
-                raise ValueError("A rejection reason is required")
+            if not reviewer_note or len(reviewer_note.strip()) < 10:
+                raise ValueError("Please provide a rejection reason of at least 10 characters")
             item.review_status = "REJECTED"
             item.state = MigrationState.REJECTED.value
         await AuditService(self.session).log_event(
