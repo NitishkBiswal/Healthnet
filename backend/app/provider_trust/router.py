@@ -14,9 +14,12 @@ from app.provider_trust.schemas import (
     PractitionerRoleCreate,
     PractitionerRoleResponse,
     TrustStatus,
+    ProviderJurisdictionRequestCreate,
+    ProviderJurisdictionReview,
+    ProviderJurisdictionRequestResponse,
 )
 from app.provider_trust.service import ProviderTrustService
-from app.security.dependencies import require_role
+from app.security.dependencies import get_current_user, require_role
 from app.security.rbac import Role
 
 router = APIRouter(tags=["Provider Trust"])
@@ -140,6 +143,63 @@ async def set_provider_status(
         return ProviderResponse.model_validate(x)
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+@router.get("/providers/me/jurisdiction-requests", response_model=list[ProviderJurisdictionRequestResponse])
+async def my_jurisdiction_requests(
+    user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        items = await ProviderTrustService(session).list_my_jurisdiction_requests(str(user.get("sub", "")))
+        return [ProviderJurisdictionRequestResponse.model_validate(item) for item in items]
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.post("/providers/me/jurisdiction-requests", response_model=ProviderJurisdictionRequestResponse, status_code=201)
+async def create_my_jurisdiction_request(
+    request: ProviderJurisdictionRequestCreate,
+    user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await ProviderTrustService(session).create_jurisdiction_request(
+            str(user.get("sub", "")), request
+        )
+        await session.commit()
+        return ProviderJurisdictionRequestResponse.model_validate(item)
+    except ValueError as exc:
+        await session.rollback()
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/jurisdiction-requests", response_model=list[ProviderJurisdictionRequestResponse])
+async def list_jurisdiction_requests(
+    _: dict = Depends(require_admin),
+    session: AsyncSession = Depends(get_db),
+):
+    items = await ProviderTrustService(session).list_jurisdiction_requests()
+    return [ProviderJurisdictionRequestResponse.model_validate(item) for item in items]
+
+
+@router.post("/jurisdiction-requests/{request_id}/review", response_model=ProviderJurisdictionRequestResponse)
+async def review_jurisdiction_request(
+    request_id: UUID,
+    decision: ProviderJurisdictionReview,
+    user: dict = Depends(require_admin),
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await ProviderTrustService(session).review_jurisdiction_request(
+            request_id, str(user.get("sub", "unknown")),
+            decision.decision, decision.reviewer_note,
+        )
+        await session.commit()
+        return ProviderJurisdictionRequestResponse.model_validate(item)
+    except ValueError as exc:
+        await session.rollback()
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.post("/roles", response_model=PractitionerRoleResponse, status_code=201)
