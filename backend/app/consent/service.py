@@ -121,7 +121,7 @@ class ConsentService:
             )
             .order_by(PatientIdentity.family_name, PatientIdentity.given_name)
         )
-        rows = list(result.all())
+        rows = list(result.tuples().all())
 
         # Backfill grants that predate a completed migration. This makes the
         # renewal notice work for patients transferred before this rule shipped.
