@@ -135,6 +135,7 @@ export const api = {
   createProvider: (body: { external_id: string; given_name: string; family_name: string; license_number: string; jurisdiction: string; keycloak_subject?: string }) =>
     request<Provider>("/provider-trust/providers", { method: "POST", body: JSON.stringify(body) }),
   emergency: (healthId: string, purpose = "TREATMENT", scope = "clinical") => request<{ health_id: string; blood_group?: string | null; allergies: string[]; medications: string[]; conditions: string[]; emergency_contacts: string[] }>("/emergency/patients/" + encodeURIComponent(healthId) + "/emergency-profile?purpose=" + encodeURIComponent(purpose) + "&scope=" + encodeURIComponent(scope)),
+  invokeBreakGlass: (healthId: string, reason: string, tier = "TIER_1") => request<{ event_id: string; health_id: string; tier: string; status: string; valid_for_minutes: number; message: string }>("/emergency/patients/" + encodeURIComponent(healthId) + "/break-glass", { method: "POST", body: JSON.stringify({ reason, tier }) }),
   myMedicalRecords: () => request<Record<string, unknown>>("/longitudinal/patients/me/medical-records"),
   longitudinal: (healthId: string, purpose = "TREATMENT", scope = "clinical") =>
     request<Record<string, unknown>>("/longitudinal/patients/longitudinal-view", { method: "POST", body: JSON.stringify({ health_id: healthId, purpose, scope }) }),
